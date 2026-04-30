@@ -348,9 +348,16 @@ async function doLogout(){
 }
 
 async function checkSession(){
-  const {data:{session}} = await sb.auth.getSession();
-  if(session){ currentUser = session.user; startApp(); }
-  else{ document.getElementById('login-screen').style.display='flex'; }
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if(session){ currentUser = session.user; startApp(); }
+    else{ document.getElementById('login-screen').style.display='flex'; }
+  } catch(e){
+    console.error('Erro de conexão Supabase:', e);
+    document.getElementById('login-screen').style.display='flex';
+    document.getElementById('login-error').style.display='flex';
+    document.getElementById('login-error').textContent='❌ Erro de conexão. Verifique as credenciais do Supabase.';
+  }
 }
 
 function startApp(){
@@ -363,16 +370,20 @@ function startApp(){
 
 async function loadAll(){
   const uid = currentUser.id;
-  const [cl,pk,ss,dc] = await Promise.all([
-    sb.from('clients').select('*').eq('user_id',uid).order('name'),
-    sb.from('packages').select('*').eq('user_id',uid).order('created_at',{ascending:false}),
-    sb.from('sessions').select('*').eq('user_id',uid).order('date'),
-    sb.from('documents').select('*').eq('user_id',uid).order('created_at',{ascending:false}),
-  ]);
-  allClients  = cl.data||[];
-  allPacotes  = pk.data||[];
-  allSessoes  = ss.data||[];
-  allDocs     = dc.data||[];
+  try {
+    const [cl,pk,ss] = await Promise.all([
+      sb.from('clients').select('*').eq('user_id',uid).order('name'),
+      sb.from('packages').select('*').eq('user_id',uid).order('created_at',{ascending:false}),
+      sb.from('sessions').select('*').eq('user_id',uid).order('date'),
+    ]);
+    allClients = cl.data||[];
+    allPacotes = pk.data||[];
+    allSessoes = ss.data||[];
+  } catch(e){ console.error('Erro ao carregar dados:', e); }
+  try {
+    const dc = await sb.from('documents').select('*').eq('user_id',uid).order('created_at',{ascending:false});
+    allDocs = dc.data||[];
+  } catch(e){ allDocs = []; console.warn('Tabela documents não encontrada, ignorando.'); }
 }
 
 // ─── NAVEGAÇÃO ─────────────────────────────────────────────────────────────
