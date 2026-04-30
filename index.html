@@ -409,17 +409,38 @@ function renderDashboard(){
 // ═══ CLIENTES ════════════════════════════════════════════════════════════════
 function renderClientes(){
   setMain(
-    `<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Clientes</h1>${themeBtn()}<button class="btn btn-primary" onclick="openModalCliente()">+ Nova Cliente</button></div>`+
-    `<div class="card"><div class="section-header"><div class="search-wrap"><span class="search-icon">🔍</span><input id="busca" placeholder="Buscar..." oninput="filtrarC()"/></div></div><div id="lista-c">${tabelaC(allC)}</div></div>`
+    '<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Clientes</h1>'+themeBtn()+'<button class="btn btn-primary" onclick="openModalCliente()">+ Novo Cliente</button></div>'+
+    '<div class="card" style="padding:0">'+
+    '<div style="padding:12px 16px;border-bottom:1px solid var(--border)"><div class="search-wrap" style="max-width:100%"><span class="search-icon">🔍</span><input id="busca" placeholder="Buscar cliente..." oninput="filtrarC()" style="border:none;background:transparent;padding-left:30px;box-shadow:none"/></div></div>'+
+    '<div id="lista-c">'+tabelaC(allC)+'</div></div>'
   );
 }
-function filtrarC(){const q=document.getElementById('busca').value.toLowerCase();document.getElementById('lista-c').innerHTML=tabelaC(allC.filter(c=>c.name.toLowerCase().includes(q)||(c.phone||'').includes(q)||(c.email||'').toLowerCase().includes(q)));}
+function filtrarC(){
+  const q=document.getElementById('busca').value.toLowerCase();
+  document.getElementById('lista-c').innerHTML=tabelaC(allC.filter(c=>c.name.toLowerCase().includes(q)||(c.phone||'').includes(q)||(c.email||'').toLowerCase().includes(q)));
+}
 function tabelaC(list){
   if(!list.length)return'<div class="empty"><div class="empty-icon">👥</div><p>Nenhuma cliente</p></div>';
-  return`<div class="table-wrap"><table><thead><tr><th>NOME</th><th>TELEFONE</th><th>EMAIL</th><th>ANIVERSÁRIO</th><th></th></tr></thead><tbody>`+
-  list.map(c=>`<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="client-avatar" style="width:32px;height:32px;font-size:12px">${initials(c.name)}</div><strong>${c.name}</strong></div></td><td class="td-muted">${c.phone||'—'}</td><td class="td-muted">${c.email||'—'}</td><td class="td-muted">${c.birthdate?fmtDate(c.birthdate):'—'}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalCliente('${c.id}')">✏️</button></td></tr>`).join('')+
-  `</tbody></table></div>`;
+  let rows=list.map(c=>{
+    const npkg=allP.filter(p=>p.client_id===c.id).length;
+    const nreal=allS.filter(s=>s.client_id===c.id&&s.status==='realizada').length;
+    const pkgLabel=npkg===1?'1 pacote':npkg+' pacotes';
+    const sesLabel=nreal===1?'1 realizada':nreal+' realizadas';
+    return '<tr>'+
+      '<td><div style="display:flex;align-items:center;gap:10px"><div class="client-avatar" style="width:36px;height:36px;font-size:13px">'+initials(c.name)+'</div><strong>'+c.name+'</strong></div></td>'+
+      '<td class="td-muted">'+(c.phone||'—')+'</td>'+
+      '<td><span class="badge badge-blue">'+pkgLabel+'</span></td>'+
+      '<td><span class="badge badge-green">'+sesLabel+'</span></td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn btn-sm btn-ghost" onclick="abrirPerfilCliente(\"'+c.id+'\")" title="Ver perfil">👁️</button> '+
+        '<button class="btn btn-sm btn-ghost" onclick="abrirProntuario(\"'+c.id+'\")" title="Prontuário">📋</button> '+
+        '<button class="btn btn-sm btn-ghost" onclick="openModalCliente(\"'+c.id+'\")" title="Editar">✏️</button> '+
+        '<button class="btn btn-sm btn-danger" onclick="delCliente(\"'+c.id+'\")" title="Excluir">🗑️</button>'+
+      '</td></tr>';
+  }).join('');
+  return'<div class="table-wrap"><table><thead><tr><th>CLIENTE</th><th>TELEFONE</th><th>PACOTES</th><th>SESSÕES</th><th>AÇÕES</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
+
 function openModalCliente(id=null){
   const c=id?allC.find(x=>x.id===id)||{}:{};
   openModal(id?'Editar Cliente':'Nova Cliente',
@@ -479,10 +500,9 @@ function abrirPerfilCliente(cid){
 function renderSessoes(){
   const ms=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const year=calDate.getFullYear(),month=calDate.getMonth();
-  // Sessões do mês
   const sesMes=allS.filter(s=>{const[y,m]=s.date.split('-').map(Number);return y===year&&(m-1)===month;});
-  // Todos clientes que têm sessão no mês OU pacote ativo
-  const cidsSet=new Set([...sesMes.map(s=>s.client_id),...allP.map(p=>p.client_id)]);
+  // clientes com sessão no mês OU com pacote ativo
+  const cidsSet=new Set([...sesMes.map(s=>s.client_id),...allP.filter(p=>!p.encerrado).map(p=>p.client_id)]);
   const clientes=[...cidsSet].sort((a,b)=>cName(a).localeCompare(cName(b)));
 
   let cards='';
@@ -493,90 +513,112 @@ function renderSessoes(){
     const uid=cid.replace(/-/g,'').slice(0,8);
     const realTot=allS.filter(s=>s.client_id===cid&&s.status==='realizada').length;
     const faltTot=allS.filter(s=>s.client_id===cid&&s.status==='falta').length;
+    let sesLabel='sessões:';
+    if(realTot>0)sesLabel+=' <span style="color:var(--green)">'+realTot+' realizadas</span>';
+    if(faltTot>0)sesLabel+=' · <span style="color:var(--red)">'+faltTot+' falta'+(faltTot>1?'s':'')+'</span>';
 
-    cards+=`<div class="card" style="margin-bottom:12px">`;
-    // Header
-    cards+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">`;
-    cards+=`<div class="client-avatar" style="width:38px;height:38px;font-size:14px;cursor:pointer" onclick="abrirPerfilCliente('${cid}')">${initials(cName(cid))}</div>`;
-    cards+=`<div style="flex:1"><div style="font-weight:600">${cName(cid)}</div>`;
-    cards+=`<div style="font-size:11px;color:var(--text2)">sessões:${realTot>0?' <span style="color:var(--green)">'+realTot+' realizadas</span>':''}${faltTot>0?' · <span style="color:var(--red)">'+faltTot+' falta'+(faltTot>1?'s':'')+'</span>':''}</div></div>`;
-    cards+=`<button class="btn btn-sm btn-ghost" onclick="abrirPerfilCliente('${cid}')">Ver perfil →</button></div>`;
+    cards+='<div class="card" style="margin-bottom:12px">';
+    // ─ Cabeçalho cliente
+    cards+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:'+((ativas.length||feitas.length)?'12px':'6px')+'">'+
+      '<div class="client-avatar" style="width:40px;height:40px;font-size:15px;cursor:pointer" onclick="abrirPerfilCliente(\""+cid+"\"">'+initials(cName(cid))+'</div>'+
+      '<div style="flex:1"><div style="font-weight:700;font-size:15px">'+cName(cid)+'</div>'+
+      '<div style="font-size:11px;color:var(--text2)">'+sesLabel+'</div></div>'+
+      '<button class="btn btn-sm btn-secondary" onclick="abrirProntuario(\""+cid+"\"" style="gap:4px">📋 Prontuário</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="abrirPerfilCliente(\""+cid+"\"">Ver perfil →</button>'+
+      '</div>';
 
-    // Tabela de agendadas
+    // ─ Tabela de agendadas
     if(ativas.length){
-      cards+=`<div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>PACOTE</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>`;
+      cards+='<div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>PACOTE</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>';
       ativas.forEach(s=>{
         const pkg=s.package_id?allP.find(p=>p.id===s.package_id):null;
-        const sesOrdem=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
+        const ordemS=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
         const totPkg=pkg?parseInt(pkg.total_sessoes)||0:0;
-        cards+=`<tr>`;
-        cards+=`<td class="td-muted">${sesOrdem&&totPkg?sesOrdem+'/'+totPkg:'—'}</td>`;
-        cards+=`<td><strong>${fmtDate(s.date)}</strong></td>`;
-        cards+=`<td>${s.hora||'—'}</td>`;
-        cards+=`<td>${badgeTipo(s.tipo)}</td>`;
-        cards+=`<td class="td-muted">${pkg?cName(pkg.client_id):'—'}</td>`;
-        cards+=`<td>${badgeStatus(s.status)}</td>`;
-        cards+=`<td>${pgtoBtn(s)}</td>`;
-        cards+=`<td style="white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')" title="Editar">✏️</button> <button class="btn btn-sm btn-danger" onclick="delSessao('${s.id}')" title="Excluir">🗑️</button></td>`;
-        cards+=`</tr>`;
+        cards+='<tr>'+
+          '<td class="td-muted">'+(ordemS&&totPkg?ordemS+'/'+totPkg:'—')+'</td>'+
+          '<td><strong>'+fmtDate(s.date)+'</strong></td>'+
+          '<td>'+(s.hora||'—')+'</td>'+
+          '<td>'+badgeTipo(s.tipo)+'</td>'+
+          '<td class="td-muted">'+(pkg?cName(pkg.client_id):'—')+'</td>'+
+          '<td>'+badgeStatus(s.status)+'</td>'+
+          '<td>'+pgtoBtn(s)+'</td>'+
+          '<td style="white-space:nowrap">'+
+            '<button class="btn btn-sm btn-ghost" onclick="openModalSessao(\""+s.id+"\"">✏️</button> '+
+            '<button class="btn btn-sm btn-danger" onclick="delSessao(\""+s.id+"\"">🗑️</button>'+
+          '</td></tr>';
       });
-      cards+=`</tbody></table></div>`;
-    }else{
-      // Sem sessões agendadas no mês mas tem pacote
-      const pkgsC=allP.filter(p=>p.client_id===cid);
-      if(pkgsC.length&&!feitas.length){
-        cards+=`<div style="font-size:12px;color:var(--text3);padding:4px 0">Sem sessões agendadas neste mês</div>`;
-      }
+      cards+='</tbody></table></div>';
+    }else if(!feitas.length){
+      cards+='<div style="font-size:12px;color:var(--text3);padding:2px 0 8px">Sem sessões agendadas neste mês</div>';
     }
 
-    // Realizadas/faltas colapsadas
+    // ─ Realizadas/faltas colapsadas
     if(feitas.length){
-      const nFalta=feitas.filter(s=>s.status==='falta').length;
-      cards+=`<button class="done-toggle" onclick="toggleDone('done-${uid}',this)">▶ Ver realizadas/faltas (${feitas.length}${nFalta>0?' — '+nFalta+' falta'+(nFalta>1?'s':''):''})</button>`;
-      cards+=`<div id="done-${uid}" style="display:none"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>`;
+      const nF=feitas.filter(s=>s.status==='falta').length;
+      cards+='<button class="done-toggle" onclick="toggleDone(\'done-\'+uid,this)">▶ Ver realizadas/faltas ('+feitas.length+(nF?' — '+nF+' falta'+(nF>1?'s':''):'')+')</button>';
+      cards+='<div id="done-'+uid+'" style="display:none"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>';
       feitas.forEach(s=>{
         const pkg=s.package_id?allP.find(p=>p.id===s.package_id):null;
-        const sesOrdem=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
+        const ordemS=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
         const totPkg=pkg?parseInt(pkg.total_sessoes)||0:0;
-        cards+=`<tr style="opacity:0.65"><td class="td-muted">${sesOrdem&&totPkg?sesOrdem+'/'+totPkg:'—'}</td><td>${fmtDate(s.date)}</td><td>${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td>${pgtoBtn(s)}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')">✏️</button></td></tr>`;
+        cards+='<tr style="opacity:0.65">'+
+          '<td class="td-muted">'+(ordemS&&totPkg?ordemS+'/'+totPkg:'—')+'</td>'+
+          '<td>'+fmtDate(s.date)+'</td><td>'+(s.hora||'—')+'</td>'+
+          '<td>'+badgeTipo(s.tipo)+'</td>'+
+          '<td>'+badgeStatus(s.status)+'</td>'+
+          '<td>'+pgtoBtn(s)+'</td>'+
+          '<td><button class="btn btn-sm btn-ghost" onclick="openModalSessao(\""+s.id+"\"">✏️</button></td></tr>';
       });
-      cards+=`</tbody></table></div></div>`;
+      cards+='</tbody></table></div></div>';
     }
 
-    // Badges de pacotes no rodapé
-    const pkgsC2=allP.filter(p=>p.client_id===cid);
-    if(pkgsC2.length){
-      cards+=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:center">`;
-      cards+=`<span style="font-size:11px;color:var(--text3)">Pacotes:</span>`;
-      pkgsC2.forEach(p=>{
+    // ─ Mini badges dos pacotes
+    const pkgsC=allP.filter(p=>p.client_id===cid);
+    if(pkgsC.length){
+      cards+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text3)">Pacotes:</span>';
+      pkgsC.forEach(p=>{
         const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
         const t=parseInt(p.total_sessoes)||0;
-        const pago=p.pago===true||p.pago==='true';
-        cards+=`<span class="badge ${pago?'badge-green':'badge-yellow'}" style="cursor:pointer" onclick="openModalPacote('${p.id}')" title="${TIPOS[p.tipo]?.label||p.tipo}">${TIPOS[p.tipo]?.emoji||'📦'} ${r}/${t} ${pago?'💰':'⏳'}</span>`;
+        cards+='<span class="badge '+(p.pago?'badge-green':'badge-yellow')+'" style="cursor:pointer" onclick="openModalPacote(\""+p.id+"\"" title="'+(TIPOS[p.tipo]?.label||p.tipo)+'">'+( TIPOS[p.tipo]?.emoji||'📦')+' '+r+'/'+t+' '+(p.pago?'💰':'⏳')+'</span>';
       });
-      cards+=`</div>`;
+      cards+='</div>';
     }
-    cards+=`</div>`;
+    cards+='</div>';
   });
 
-  // Todos os pacotes
-  const pacotesHtml=allP.map(p=>{
+  // ─ Todos os pacotes
+  const pkgsHtml=allP.map(p=>{
     const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
     const t=parseInt(p.total_sessoes)||0;
     const pct=t>0?Math.round((r/t)*100):0;
-    const barCls=pct>=100?'progress-red':pct>=70?'progress-yellow':'progress-green';
-    return`<div class="card" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="client-avatar" style="width:36px;height:36px;font-size:13px">${initials(cName(p.client_id))}</div><div style="flex:1"><div style="font-weight:600">${cName(p.client_id)}</div><div style="font-size:11px;color:var(--text3)">${badgeTipo(p.tipo)} — ${plural(t)} — ${fmtMoney(p.valor_total)}</div></div><div style="display:flex;gap:6px;align-items:center"><span class="badge ${p.encerrado?'badge-gray':'badge-green'}">${p.encerrado?'Encerrado':'Ativo'}</span><button class="btn btn-sm btn-ghost" onclick="openModalPacote('${p.id}')">✏️</button></div></div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px"><span>${r} realizadas de ${t}</span><span>${pct}%</span></div><div class="progress-bar"><div class="progress-fill ${barCls}" style="width:${Math.min(pct,100)}%"></div></div></div>`;
+    const bc=pct>=100?'progress-red':pct>=70?'progress-yellow':'progress-green';
+    return'<div class="card" style="margin-bottom:10px">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'+
+        '<div class="client-avatar" style="width:36px;height:36px;font-size:13px">'+initials(cName(p.client_id))+'</div>'+
+        '<div style="flex:1"><div style="font-weight:600">'+cName(p.client_id)+'</div>'+
+        '<div style="font-size:11px;color:var(--text3)">'+badgeTipo(p.tipo)+' — '+plural(t)+' — '+fmtMoney(p.valor_total)+'</div></div>'+
+        '<span class="badge '+(p.encerrado?'badge-gray':'badge-green')+'">'+(p.encerrado?'Encerrado':'Ativo')+'</span>'+
+        '<button class="btn btn-sm btn-ghost" onclick="openModalPacote(\""+p.id+"\"">✏️</button>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px"><span>'+r+' realizadas de '+t+'</span><span>'+pct+'%</span></div>'+
+      '<div class="progress-bar"><div class="progress-fill '+bc+'" style="width:'+Math.min(pct,100)+'%"></div></div>'+
+    '</div>';
   }).join('');
 
   setMain(
-    `<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Sessões/Pacotes</h1>${themeBtn()}<button class="btn btn-secondary" onclick="openModalPacote()">+ Pacote</button><button class="btn btn-primary" onclick="openModalSessao()">+ Sessão</button></div>`+
-    `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px"><button class="cal-nav-btn" onclick="moveMes(-1)">‹</button><span style="font-weight:600">${ms[month]} ${year}</span><button class="cal-nav-btn" onclick="moveMes(1)">›</button><button class="btn btn-sm btn-ghost" onclick="resetMes()">Hoje</button></div>`+
+    '<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Sessões/Pacotes</h1>'+themeBtn()+
+    '<button class="btn btn-secondary" onclick="openModalPacote()">+ Pacote</button>'+
+    '<button class="btn btn-primary" onclick="openModalSessao()">+ Sessão</button></div>'+
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">'+
+    '<button class="cal-nav-btn" onclick="moveMes(-1)">‹</button>'+
+    '<span style="font-weight:600;min-width:90px;text-align:center">'+ms[month]+' '+year+'</span>'+
+    '<button class="cal-nav-btn" onclick="moveMes(1)">›</button>'+
+    '<button class="btn btn-sm btn-ghost" onclick="resetMes()">Hoje</button></div>'+
     (cards||'<div class="empty"><div class="empty-icon">📋</div><p>Sem sessões ou pacotes neste mês</p></div>')+
-    `<div style="margin:20px 0 10px;font-size:14px;font-weight:600;color:var(--text2)">📦 Todos os Pacotes</div>`+
-    (pacotesHtml||'<div class="empty"><div class="empty-icon">📦</div><p>Nenhum pacote cadastrado</p></div>')
+    '<div style="margin:20px 0 10px;font-size:14px;font-weight:600;color:var(--text2)">📦 Todos os Pacotes</div>'+
+    (pkgsHtml||'<div class="empty"><div class="empty-icon">📦</div><p>Nenhum pacote</p></div>')
   );
 }
-
 
 function moveMes(d){calDate.setMonth(calDate.getMonth()+d);renderSessoes();}
 function resetMes(){calDate=new Date();renderSessoes();}
@@ -761,33 +803,90 @@ async function delNota(id){if(!confirm('Excluir nota?'))return;await sb.from('no
 
 // ═══ FINANCEIRO ══════════════════════════════════════════════════════════════
 function renderFinanceiro(){
-  const hoje=new Date();const y=hoje.getFullYear(),m=hoje.getMonth();
+  const hoje=new Date();
+  const y=hoje.getFullYear(),m=hoje.getMonth();
   const ms=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const mes=ms[m]+' de '+y;
-  const sesMes=allS.filter(s=>{if(s.status!=='realizada'&&s.status!=='parcial')return false;const[sy,sm]=s.date.split('-').map(Number);return sy===y&&(sm-1)===m;});
+  const mesNome=ms[m]+' de '+y;
+  const mesAtual=y+'-'+String(m+1).padStart(2,'0');
+
+  // Sessões realizadas/parcial neste mês
+  const sesMes=allS.filter(s=>{
+    if(s.status!=='realizada'&&s.status!=='parcial')return false;
+    const[sy,sm]=s.date.split('-').map(Number);
+    return sy===y&&(sm-1)===m;
+  });
   const recMes=sesMes.reduce((a,s)=>a+(parseFloat(s.valor)||0),0);
   const recTotal=allS.filter(s=>s.status==='realizada'||s.status==='parcial').reduce((a,s)=>a+(parseFloat(s.valor)||0),0);
-  const pendentes=allP.filter(p=>p.pago===false||p.pago==='false');
+
+  // Pendentes = pacotes sem pago (undefined, null ou false)
+  const pendentes=allP.filter(p=>!p.pago&&!p.encerrado);
   const totPend=pendentes.reduce((a,p)=>a+(parseFloat(p.valor_total)||0),0);
+
+  // Histórico por mês (baseado em sessões realizadas)
   const porMes={};
-  allS.filter(s=>s.status==='realizada'||s.status==='parcial').forEach(s=>{const ym=s.date.slice(0,7);porMes[ym]=(porMes[ym]||0)+(parseFloat(s.valor)||0);});
-  const meses=Object.keys(porMes).sort().reverse();
-  const mesAtual=y+'-'+String(m+1).padStart(2,'0');
+  allS.filter(s=>s.status==='realizada'||s.status==='parcial').forEach(s=>{
+    const ym=s.date.slice(0,7);
+    porMes[ym]=(porMes[ym]||0)+(parseFloat(s.valor)||0);
+  });
+  const mesesHist=Object.keys(porMes).sort().reverse();
+
+  // Por tipo
+  const porTipo={};
+  allS.filter(s=>s.status==='realizada').forEach(s=>{
+    porTipo[s.tipo]=(porTipo[s.tipo]||0)+(parseFloat(s.valor)||0);
+  });
+
   setMain(
-    `<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Financeiro</h1>${themeBtn()}</div>`+
-    `<div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:10px">📅 Resumo de ${mes}</div>`+
-    `<div class="grid-4" style="margin-bottom:20px"><div class="stat-card green"><div class="stat-icon">💵</div><div class="stat-val">${fmtMoney(recMes)}</div><div class="stat-label">RECEBIDO ESTE MÊS</div></div><div class="stat-card yellow"><div class="stat-icon">⏳</div><div class="stat-val">${fmtMoney(totPend)}</div><div class="stat-label">A RECEBER</div></div><div class="stat-card blue"><div class="stat-icon">📊</div><div class="stat-val">${sesMes.length}</div><div class="stat-label">SESSÕES ESTE MÊS</div></div><div class="stat-card purple"><div class="stat-icon">💰</div><div class="stat-val">${fmtMoney(recTotal)}</div><div class="stat-label">TOTAL RECEBIDO</div></div></div>`+
-    `<div class="grid-2" style="margin-bottom:20px">`+
-    `<div class="card"><div class="section-title" style="margin-bottom:14px">📅 Histórico por Mês</div><div class="table-wrap"><table><thead><tr><th>MÊS</th><th>RECEITA</th></tr></thead><tbody>`+
-    (meses.length?meses.map(ym=>{const[sy,sm]=ym.split('-').map(Number);const isCur=ym===mesAtual;return`<tr><td>${isCur?'🟢 ':''}<strong>${ms[sm-1]} de ${sy}${isCur?' (atual)':''}</strong></td><td style="color:var(--green);font-weight:600">${fmtMoney(porMes[ym])}</td></tr>`;}).join(''):'<tr><td colspan="2" style="text-align:center;color:var(--text3)">Sem histórico</td></tr>')+
-    `</tbody></table></div></div>`+
-    `<div class="card"><div class="section-title" style="margin-bottom:14px">Por tipo de serviço</div>`+
-    (()=>{const pt={};allS.filter(s=>s.status==='realizada').forEach(s=>{pt[s.tipo]=(pt[s.tipo]||0)+(parseFloat(s.valor)||0);});const entries=Object.entries(pt);return entries.length?entries.map(([t,v])=>`<div class="ds-item"><div style="width:3px;height:30px;border-radius:99px;background:${t==='psicoterapia'?'var(--blue)':t==='tarot'?'var(--green)':t==='reiki'?'var(--purple)':t==='astrologia'?'var(--yellow)':'var(--orange)'};flex-shrink:0"></div><div style="flex:1">${TIPOS[t]?.label||t}</div><div style="font-weight:600">${fmtMoney(v)}</div></div>`).join(''):'<div class="empty" style="padding:20px">Sem dados</div>';})()+'</div></div>'+
-    (pendentes.length?`<div class="card"><div class="section-title" style="margin-bottom:14px">⏳ Pagamentos Pendentes</div><div class="table-wrap"><table><thead><tr><th>CLIENTE</th><th>TIPO</th><th>VALOR</th><th>AÇÃO</th></tr></thead><tbody>`+pendentes.map(p=>`<tr><td><strong>${cName(p.client_id)}</strong></td><td>${TIPOS[p.tipo]?.label||p.tipo}</td><td style="color:var(--yellow);font-weight:600">${fmtMoney(p.valor_total)}</td><td><button class="btn btn-sm btn-primary" onclick="marcarPago('${p.id}')">Marcar pago</button></td></tr>`).join('')+`</tbody></table></div></div>`:'')+
-    `</div>`
+    '<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Financeiro</h1>'+themeBtn()+'</div>'+
+    '<div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:10px">📅 Resumo de '+mesNome+'</div>'+
+    '<div class="grid-4" style="margin-bottom:20px">'+
+      '<div class="stat-card green"><div class="stat-icon">💵</div><div class="stat-val">'+fmtMoney(recMes)+'</div><div class="stat-label">RECEBIDO ESTE MÊS</div></div>'+
+      '<div class="stat-card yellow"><div class="stat-icon">♦️</div><div class="stat-val">R$ 0,00</div><div class="stat-label">1ª PARCELA ESTE MÊS</div></div>'+
+      '<div class="stat-card blue"><div class="stat-icon">⏳</div><div class="stat-val">'+fmtMoney(totPend)+'</div><div class="stat-label">A RECEBER ESTE MÊS</div></div>'+
+      '<div class="stat-card purple"><div class="stat-icon">📊</div><div class="stat-val">'+fmtMoney(recTotal)+'</div><div class="stat-label">TOTAL RECEBIDO</div></div>'+
+    '</div>'+
+
+    '<div class="grid-2" style="margin-bottom:20px">'+
+    '<div class="card">'+
+      '<div class="section-title" style="margin-bottom:14px">📅 Histórico por Mês</div>'+
+      '<div class="table-wrap"><table><thead><tr><th>MÊS</th><th style="text-align:right">RECEITA RECEBIDA</th></tr></thead><tbody>'+
+      (mesesHist.length?mesesHist.map(ym=>{
+        const[sy,sm]=ym.split('-').map(Number);
+        const cur=ym===mesAtual;
+        return'<tr'+(cur?' style="background:rgba(52,217,138,0.05)"':'')+'>'+
+          '<td>'+(cur?'🟢 ':'')+ms[sm-1]+' de '+sy+(cur?' (atual)':'')+'</td>'+
+          '<td style="text-align:right;color:var(--green);font-weight:600">'+fmtMoney(porMes[ym])+'</td></tr>';
+      }).join(''):'<tr><td colspan="2" style="text-align:center;color:var(--text3)">Sem histórico ainda</td></tr>')+
+      '</tbody></table></div>'+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="section-title" style="margin-bottom:14px">Por tipo de serviço</div>'+
+      (Object.entries(porTipo).length?Object.entries(porTipo).map(([t,v])=>
+        '<div class="ds-item">'+
+        '<div style="width:3px;height:30px;border-radius:99px;background:'+(t==='psicoterapia'?'var(--blue)':t==='tarot'?'var(--green)':t==='reiki'?'var(--purple)':t==='astrologia'?'var(--yellow)':'var(--orange)')+';flex-shrink:0"></div>'+
+        '<div style="flex:1">'+(TIPOS[t]?.emoji||'')+'  '+(TIPOS[t]?.label||t)+'</div>'+
+        '<div style="font-weight:600">'+fmtMoney(v)+'</div></div>'
+      ).join(''):'<div class="empty" style="padding:20px">Sem dados ainda</div>')+
+    '</div></div>'+
+
+    '<div class="card">'+
+      '<div class="section-title" style="margin-bottom:14px">⏳ Pagamentos Pendentes</div>'+
+      (pendentes.length?
+        '<div class="table-wrap"><table><thead><tr><th>CLIENTE</th><th>PACOTE</th><th>VALOR</th><th>STATUS</th><th>DATA</th><th>AÇÃO</th></tr></thead><tbody>'+
+        pendentes.map(p=>'<tr>'+
+          '<td><strong>'+cName(p.client_id)+'</strong></td>'+
+          '<td class="td-muted">'+cName(p.client_id)+'</td>'+
+          '<td style="color:var(--yellow);font-weight:600">'+fmtMoney(p.valor_total)+'</td>'+
+          '<td><span class="badge badge-yellow">⏳ Pendente</span></td>'+
+          '<td class="td-muted">—</td>'+
+          '<td><button class="btn btn-sm btn-primary" data-pid="'+p.id+'" onclick="marcarPagoEl(this)">Marcar pago</button></td>'+
+        '</tr>').join('')+'</tbody></table></div>'
+      :'<div class="empty" style="padding:20px"><div class="empty-icon">✅</div><p>Nenhum pagamento pendente!</p></div>')+
+    '</div>'
   );
 }
-async function marcarPago(id){await sb.from('packages').update({pago:true}).eq('id',id);await loadAll();renderFinanceiro();toast('✅ Pagamento registrado!');}
+
+async function marcarPago(id){await sb.from('packages').update({pago:true}).eq('id',id);await loadAll();renderFinanceiro();toast('💰 Pagamento registrado!');}
 
 // ═══ CONFIG ══════════════════════════════════════════════════════════════════
 function renderConfig(){
@@ -818,6 +917,85 @@ function pgtoBtn(s){
   const pago=s.package_id?(allP.find(p=>p.id===s.package_id)?.pago===true):( s.pago===true||s.pago==='true');
   return `<span class="badge ${pago?'badge-green':'badge-yellow'}" style="cursor:pointer" onclick="togglePgtoSessao('${s.id}')" title="Clique para alternar">${pago?'💰 Pago':'⏳ Pendente'}</span>`;
 }
+
+function abrirProntuario(cid){
+  const c=allC.find(x=>x.id===cid)||{};
+  const pkgs=allP.filter(p=>p.client_id===cid);
+  const wrap=document.createElement('div');
+  if(!pkgs.length){
+    wrap.innerHTML='<div class="empty"><div class="empty-icon">📦</div><p>Nenhum pacote cadastrado.</p><button class="btn btn-primary" style="margin-top:12px" id="pron-criar-pkg">+ Criar Pacote</button></div>';
+    const modal=document.createElement('div');
+    modal.appendChild(wrap);
+    openModal('📋 Prontuário — '+c.name, modal.innerHTML);
+    setTimeout(()=>{
+      const btn=document.getElementById('pron-criar-pkg');
+      if(btn)btn.onclick=()=>{closeModal();openModalPacote(null,cid);};
+    },0);
+    return;
+  }
+  pkgs.forEach(p=>{
+    const sessoesPkg=allS.filter(s=>s.package_id===p.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const r=sessoesPkg.filter(s=>s.status==='realizada').length;
+    const t=parseInt(p.total_sessoes)||0;
+    const pago=!!p.pago;
+    const dataInicio=p.data_inicio?fmtDate(p.data_inicio):'?';
+    const dataFim=sessoesPkg.length?fmtDate(sessoesPkg[sessoesPkg.length-1].date):'?';
+    const card=document.createElement('div');
+    card.style.cssText='background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px';
+    const pgBadge=document.createElement('span');
+    pgBadge.className='badge '+(pago?'badge-green':'badge-yellow');
+    pgBadge.style.cursor='pointer';
+    pgBadge.textContent=pago?'💰 Pago':'⏳ Pendente';
+    pgBadge.onclick=()=>togglePago(p.id);
+    const header=document.createElement('div');
+    header.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px';
+    const title=document.createElement('strong');
+    title.textContent=c.name+' ('+dataInicio+' – '+dataFim+')';
+    header.appendChild(title);header.appendChild(pgBadge);
+    const info=document.createElement('div');
+    info.style.cssText='font-size:12px;color:var(--text2);margin-bottom:10px';
+    info.textContent=r+'/'+t+' sessões · '+fmtMoney(p.valor_total);
+    const lbl=document.createElement('label');
+    lbl.style.cssText='font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px';
+    lbl.textContent='Anotações clínicas';
+    const ta=document.createElement('textarea');
+    ta.id='pron-'+p.id;
+    ta.style.cssText='width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-size:13px;font-family:inherit;min-height:100px;resize:vertical';
+    ta.placeholder='Anotações clínicas...';
+    ta.value=p.observacoes||'';
+    const saveRow=document.createElement('div');
+    saveRow.style.cssText='text-align:right;margin-top:8px';
+    const saveBtn=document.createElement('button');
+    saveBtn.className='btn btn-primary btn-sm';
+    saveBtn.textContent='💾 Salvar';
+    saveBtn.onclick=()=>salvarProntuario(p.id);
+    saveRow.appendChild(saveBtn);
+    card.appendChild(header);card.appendChild(info);card.appendChild(lbl);card.appendChild(ta);card.appendChild(saveRow);
+    wrap.appendChild(card);
+  });
+  openModal('📋 Prontuário — '+c.name, wrap.outerHTML);
+}
+
+async function togglePago(pkgId){
+  const p=allP.find(x=>x.id===pkgId);if(!p)return;
+  await sb.from('packages').update({pago:!p.pago}).eq('id',pkgId);
+  await loadAll();
+  const c=allC.find(x=>x.id===p.client_id);
+  if(c)abrirProntuario(c.id);
+  toast(!p.pago?'💰 Marcado como pago!':'⏳ Marcado como pendente!');
+}
+async function salvarProntuario(pkgId){
+  const txt=document.getElementById('pron-'+pkgId)?.value||'';
+  await sb.from('packages').update({observacoes:txt}).eq('id',pkgId);
+  await loadAll();
+  toast('✅ Prontuário salvo!');
+}
+
+
+function abrirNovoPacoteCid(e){const cid=e.currentTarget.dataset.cid;closeModal();openModalPacote(null,cid);}
+function marcarPagoEl(btn){marcarPago(btn.dataset.pid);}
+function togglePagoEl(el){togglePago(el.dataset.pkgid);}
+async function salvarProntuarioEl(btn){salvarProntuario(btn.dataset.pkgid);}
 // ═══ INIT ════════════════════════════════════════════════════════════════════
 checkSession();
 </script>
