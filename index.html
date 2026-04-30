@@ -855,19 +855,28 @@ async function togglePgto(sid) {
 // ══════════════════════════════════════════════════════════
 // MODAL SESSÃO
 // ══════════════════════════════════════════════════════════
-function openSessaoModal(id, dateStr, preCid) {
+function openSessaoModal(id, dateStr, preCid, prePkgId) {
   var s = id ? (allSessions.find(function(x){ return x.id===id; }) || {}) : {};
+  // Auto-fill valor from package
+  var autoValor = s.valor || '';
+  if (!id && prePkgId) {
+    var prePkg = allPackages.find(function(p){ return p.id===prePkgId; });
+    if (prePkg && prePkg.total_sessoes) {
+      autoValor = (parseFloat(prePkg.valor_total)||0) / (parseInt(prePkg.total_sessoes)||1);
+      autoValor = autoValor.toFixed(2);
+    }
+  }
   var cOpts = allClients.map(function(c){
     return '<option value="' + c.id + '"' + ((s.client_id||preCid)===c.id?' selected':'') + '>' + c.name + '</option>';
   }).join('');
   var pOpts = '<option value="">— Sem pacote —</option>' + allPackages.map(function(p){
-    return '<option value="' + p.id + '"' + (s.package_id===p.id?' selected':'') + '>' + clientName(p.client_id) + ' – ' + (TIPOS[p.tipo]?TIPOS[p.tipo].label:p.tipo) + '</option>';
+    return '<option value="' + p.id + '"' + ((s.package_id||prePkgId)===p.id?' selected':'') + '>' + clientName(p.client_id) + ' – ' + (TIPOS[p.tipo]?TIPOS[p.tipo].label:p.tipo) + '</option>';
   }).join('');
 
   var html = '';
   html += '<div class="form-row"><div class="form-group"><label>Cliente *</label><select id="s-client">' + cOpts + '</select></div><div class="form-group"><label>Tipo</label><select id="s-tipo">' + tipoOpts(s.tipo||'psicoterapia') + '</select></div></div>';
   html += '<div class="form-row"><div class="form-group"><label>Data *</label><input id="s-date" type="date" value="' + (s.date||dateStr||'') + '"></div><div class="form-group"><label>Horário</label><input id="s-hora" type="time" value="' + (s.hora||'') + '"></div></div>';
-  html += '<div class="form-row"><div class="form-group"><label>Status</label><select id="s-status"><option value="agendada"' + (s.status==='agendada'?' selected':'') + '>📅 Agendada</option><option value="realizada"' + (s.status==='realizada'?' selected':'') + '>✅ Realizada</option><option value="falta"' + (s.status==='falta'?' selected':'') + '>❌ Falta</option><option value="parcial"' + (s.status==='parcial'?' selected':'') + '>⚠️ Parcial</option></select></div><div class="form-group"><label>Valor (R$)</label><input id="s-valor" type="number" step="0.01" value="' + (s.valor||'') + '"></div></div>';
+  html += '<div class="form-row"><div class="form-group"><label>Status</label><select id="s-status"><option value="agendada"' + (s.status==='agendada'?' selected':'') + '>📅 Agendada</option><option value="realizada"' + (s.status==='realizada'?' selected':'') + '>✅ Realizada</option><option value="falta"' + (s.status==='falta'?' selected':'') + '>❌ Falta</option><option value="parcial"' + (s.status==='parcial'?' selected':'') + '>⚠️ Parcial</option></select></div><div class="form-group"><label>Valor (R$)</label><input id="s-valor" type="number" step="0.01" value="' + autoValor + '"></div></div>';
   html += '<div class="form-group"><label>Pacote</label><select id="s-pkg">' + pOpts + '</select></div>';
   html += '<div class="form-group"><label>Anotações</label><textarea id="s-obs">' + (s.observacoes||'') + '</textarea></div>';
   html += '<div class="form-actions">';
@@ -893,7 +902,14 @@ async function saveSessao(id) {
   if (!data.date) { alert('Data é obrigatória'); return; }
   if (id) { await sb.from('sessions').update(data).eq('id', id); }
   else    { await sb.from('sessions').insert(data); }
-  await loadAll(); closeModal(); renderAgenda(); showToast('✅ Sessão salva!');
+  await loadAll(); closeModal();
+  // Refresh current page
+  var activePage = document.querySelector('.nav-btn.active');
+  var page = activePage ? activePage.dataset.page : 'agenda';
+  if (page === 'sessoes') renderSessoes();
+  else if (page === 'financeiro') renderFinanceiro();
+  else renderAgenda();
+  showToast('✅ Sessão salva! Aparece na Agenda automaticamente.');
 }
 
 async function deleteSessao(id) {
@@ -967,6 +983,7 @@ async function savePacote(id) {
         var sessions = [];
         var current  = new Date(startDate + 'T12:00:00');
         var interval = parseInt(repeat);
+        var valorPorSessao = total > 0 ? (parseFloat(data.valor_total)||0) / total : 0;
         for (var i = 0; i < total; i++) {
           sessions.push({
             client_id:  data.client_id,
@@ -975,7 +992,7 @@ async function savePacote(id) {
             date:       current.toISOString().slice(0,10),
             hora:       hora,
             status:     'agendada',
-            valor:      0,
+            valor:      parseFloat(valorPorSessao.toFixed(2)),
             user_id:    currentUser.id
           });
           current.setDate(current.getDate() + interval);
@@ -1372,8 +1389,27 @@ function renderFinanceiro() {
   } else {
     html += '<div class="empty" style="padding:16px"><div class="empty-icon">✅</div><p>Nenhum pagamento pendente!</p></div>';
   }
+  // Paid packages this month
+  var pagos = allPackages.filter(function(p){ return p.pago && !p.encerrado; });
+  if (pagos.length) {
+    html += '<div class="card" style="margin-top:16px"><div class="section-title" style="margin-bottom:13px">✅ Pacotes Pagos</div>';
+    html += '<div class="table-wrap"><table><thead><tr><th>CLIENTE</th><th>TIPO</th><th>VALOR</th><th>STATUS</th><th>AÇÃO</th></tr></thead><tbody>';
+    pagos.forEach(function(p) {
+      html += '<tr><td><b>' + clientName(p.client_id) + '</b></td>';
+      html += '<td>' + (TIPOS[p.tipo]?TIPOS[p.tipo].label:p.tipo) + '</td>';
+      html += '<td style="color:var(--green);font-weight:600">' + fmtMoney(p.valor_total) + '</td>';
+      html += '<td><span class="badge badge-green" style="cursor:pointer" data-pid="' + p.id + '" onclick="markPendente(this.dataset.pid)">💰 Pago — clique para pendente</span></td>';
+      html += '<td><button class="btn btn-ghost btn-sm" data-pid="' + p.id + '" onclick="markPendente(this.dataset.pid)">↩️ Desfazer</button></td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
   html += '</div>';
   setMain(html);
+}
+
+async function markPendente(pid) {
+  await sb.from('packages').update({ pago: false }).eq('id', pid);
+  await loadAll(); renderFinanceiro(); showToast('⏳ Marcado como pendente!');
 }
 
 async function markPago(pid) {
