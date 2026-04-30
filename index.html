@@ -292,7 +292,7 @@ let _enviando=false, notasData={}, noteTimers={};
 // ═══ TEMA ════════════════════════════════════════════════════════════════════
 (function(){if(localStorage.getItem('ls_theme')==='light')document.body.classList.add('light-mode');})();
 function toggleTheme(){document.body.classList.toggle('light-mode');const l=document.body.classList.contains('light-mode');localStorage.setItem('ls_theme',l?'light':'dark');const b=document.getElementById('theme-icon');if(b)b.textContent=l?'☀️':'🌙';}
-function themeBtn(){const l=document.body.classList.contains('light-mode');return`<button class="theme-btn" onclick="toggleTheme()" title="Tema"><span id="theme-icon">${l?'☀️':'🌙'}</span></button>`;}
+function themeBtn(){const l=document.body.classList.contains('light-mode');return`<button class="theme-btn" onclick="toggleTheme()" title="Tema"><span id="theme-icon">${l?'💡':'🔅'}</span></button>`;}
 
 // ═══ TOAST ═══════════════════════════════════════════════════════════════════
 function toast(msg,type='success',ms=3000){const el=document.createElement('div');el.className='toast '+type;el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),ms);}
@@ -439,23 +439,71 @@ async function saveCliente(id){
 async function delCliente(id){if(!confirm('Excluir cliente?'))return;await sb.from('clients').delete().eq('id',id);await loadAll();closeModal();renderClientes();}
 
 // ═══ SESSÕES / PACOTES ═══════════════════════════════════════════════════════
+function abrirPerfilCliente(cid){
+  const c=allC.find(x=>x.id===cid)||{};
+  const pkgs=allP.filter(p=>p.client_id===cid);
+  const sesC=allS.filter(s=>s.client_id===cid).sort((a,b)=>b.date.localeCompare(a.date)||(b.hora||'').localeCompare(a.hora||''));
+  const real=sesC.filter(s=>s.status==='realizada').length;
+  const falt=sesC.filter(s=>s.status==='falta').length;
+  let body=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="client-avatar" style="width:52px;height:52px;font-size:20px">${initials(c.name)}</div><div><div style="font-size:18px;font-weight:700">${c.name}</div><div style="font-size:12px;color:var(--text2)">${sesC.length} sessões · ${real} realizadas${falt>0?' · '+falt+' falta(s)':''}</div></div></div>`;
+  body+=`<div style="display:flex;gap:8px;margin-bottom:18px"><button class="btn btn-primary btn-sm" onclick="openModalSessao(null,null,'${cid}')">+ Registrar Sessão</button><button class="btn btn-secondary btn-sm" onclick="closeModal();openModalPacote(null,'${cid}')">+ Novo Pacote</button><button class="btn btn-ghost btn-sm" onclick="closeModal();openModalCliente('${cid}')">✏️ Editar</button></div>`;
+  if(pkgs.length){
+    body+=`<div style="font-size:13px;font-weight:700;margin-bottom:10px">📦 Pacotes</div>`;
+    pkgs.forEach(p=>{
+      const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
+      const t=parseInt(p.total_sessoes)||0;
+      const rest=t-r;
+      const pct=t>0?Math.round((r/t)*100):0;
+      const pago=p.pago===true||p.pago==='true';
+      const barCls=pct>=100?'progress-red':pct>=70?'progress-yellow':'progress-green';
+      body+=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px">`;
+      body+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:600">${c.name}</div><span class="badge ${pago?'badge-green':'badge-yellow'}">${pago?'💰 Pago':'⏳ Pendente'}</span></div>`;
+      body+=`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">Total: <strong>${t}</strong> &nbsp; Realizadas: <strong>${r}</strong> &nbsp; Restantes: <strong>${rest}</strong> &nbsp; Valor: <strong>${fmtMoney(p.valor_total)}</strong></div>`;
+      body+=`<div class="progress-bar"><div class="progress-fill ${barCls}" style="width:${Math.min(pct,100)}%"></div></div>`;
+      body+=`</div>`;
+    });
+  }
+  if(sesC.length){
+    body+=`<div style="font-size:13px;font-weight:700;margin:14px 0 10px">📅 Histórico</div>`;
+    body+=`<div class="table-wrap"><table><thead><tr><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>STATUS</th><th></th></tr></thead><tbody>`;
+    sesC.forEach(s=>{
+      body+=`<tr><td>${fmtDate(s.date)}</td><td>${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td><button class="btn btn-sm btn-ghost" onclick="closeModal();openModalSessao('${s.id}')">✏️</button><button class="btn btn-sm btn-danger" onclick="closeModal();delSessao('${s.id}')">🗑️</button></td></tr>`;
+    });
+    body+=`</tbody></table></div>`;
+  }else{
+    body+=`<div class="empty" style="padding:20px"><div class="empty-icon">📅</div><p>Nenhuma sessão ainda</p></div>`;
+  }
+  openModal('Cliente: '+c.name, body);
+}
+
 function renderSessoes(){
   const ms=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const year=calDate.getFullYear(),month=calDate.getMonth();
   const ses=allS.filter(s=>{const[y,m]=s.date.split('-').map(Number);return y===year&&(m-1)===month;}).sort((a,b)=>a.date.localeCompare(b.date)||(a.hora||'').localeCompare(b.hora||''));
 
-  // Agrupa por cliente
+  // Todos os clientes que têm sessões no mês OU têm pacotes
+  const cidsComSessao=new Set(ses.map(s=>s.client_id));
+  const cidsComPacote=new Set(allP.map(p=>p.client_id));
+  const todosCids=new Set([...cidsComSessao,...cidsComPacote]);
+
   const grupos={};
   ses.forEach(s=>{if(!grupos[s.client_id])grupos[s.client_id]=[];grupos[s.client_id].push(s);});
 
   let cards='';
-  Object.entries(grupos).forEach(([cid,list])=>{
+  [...todosCids].sort((a,b)=>cName(a).localeCompare(cName(b))).forEach(cid=>{
+    const list=grupos[cid]||[];
     const ativas=list.filter(s=>s.status==='agendada'||s.status==='parcial');
     const feitas=list.filter(s=>s.status==='realizada'||s.status==='falta');
     const uid=cid.replace(/-/g,'').slice(0,8);
-    const tot=list.length; const real=list.filter(s=>s.status==='realizada').length; const falt=list.filter(s=>s.status==='falta').length;
+    const real=allS.filter(s=>s.client_id===cid&&s.status==='realizada').length;
+    const falt=allS.filter(s=>s.client_id===cid&&s.status==='falta').length;
+    const pkgsC=allP.filter(p=>p.client_id===cid);
     cards+=`<div class="card" style="margin-bottom:12px">`;
-    cards+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div class="client-avatar" style="width:38px;height:38px;font-size:14px">${initials(cName(cid))}</div><div style="flex:1"><div style="font-weight:600">${cName(cid)}</div><div style="font-size:11px;color:var(--text2)">sessões: ${real>0?`<span style="color:var(--green)">${real} realizadas</span>`:''} ${falt>0?`· <span style="color:var(--red)">${falt} falta${falt>1?'s':''}</span>`:''}</div></div></div>`;
+    cards+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:${list.length||pkgsC.length?'12px':'0'}">`;
+    cards+=`<div class="client-avatar" style="width:38px;height:38px;font-size:14px;cursor:pointer" onclick="abrirPerfilCliente('${cid}')">${initials(cName(cid))}</div>`;
+    cards+=`<div style="flex:1;cursor:pointer" onclick="abrirPerfilCliente('${cid}')"><div style="font-weight:600">${cName(cid)}</div>`;
+    cards+=`<div style="font-size:11px;color:var(--text2)">sessões: ${real>0?`<span style="color:var(--green)">${real} realizadas</span>`:''} ${falt>0?`· <span style="color:var(--red)">${falt} falta${falt>1?'s':''}</span>`:''}</div></div>`;
+    cards+=`<button class="btn btn-sm btn-ghost" onclick="abrirPerfilCliente('${cid}')">Ver perfil →</button></div>`;
     if(ativas.length){
       cards+=`<div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>TIPO</th><th>STATUS</th><th></th></tr></thead><tbody>`;
       ativas.forEach(s=>{
@@ -465,12 +513,25 @@ function renderSessoes(){
         cards+=`<tr><td class="td-muted">${n&&tot2?n+'/'+tot2:'—'}</td><td><strong>${fmtDate(s.date)}</strong></td><td>${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')">✏️</button></td></tr>`;
       });
       cards+=`</tbody></table></div>`;
+    }else if(!pkgsC.length){
+      cards+=`<div style="font-size:12px;color:var(--text3);padding:4px 0">Sem sessões neste mês</div>`;
     }
     if(feitas.length){
       cards+=`<button class="done-toggle" onclick="toggleDone('done-${uid}',this)">▶ Ver realizadas/faltas (${feitas.length})</button>`;
       cards+=`<div id="done-${uid}" style="display:none"><div class="table-wrap"><table><tbody>`;
       feitas.forEach(s=>{cards+=`<tr style="opacity:0.65"><td class="td-muted">${fmtDate(s.date)}</td><td class="td-muted">${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')">✏️</button></td></tr>`;});
       cards+=`</tbody></table></div></div>`;
+    }
+    // Mini resumo de pacotes do cliente
+    if(pkgsC.length){
+      cards+=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">`;
+      pkgsC.forEach(p=>{
+        const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
+        const t=parseInt(p.total_sessoes)||0;
+        const pago=p.pago===true||p.pago==='true';
+        cards+=`<span class="badge ${pago?'badge-green':'badge-yellow'}" style="cursor:pointer" onclick="openModalPacote('${p.id}')" title="${cName(p.client_id)} - ${TIPOS[p.tipo]?.label||p.tipo}">${TIPOS[p.tipo]?.emoji||'📦'} ${r}/${t} ${pago?'💰':'⏳'}</span>`;
+      });
+      cards+=`</div>`;
     }
     cards+=`</div>`;
   });
@@ -563,7 +624,7 @@ function renderList(){
 }
 
 // ═══ MODAL SESSÃO ════════════════════════════════════════════════════════════
-function openModalSessao(id=null,dateStr=null){
+function openModalSessao(id=null,dateStr=null,preClientId=null){
   const s=id?allS.find(x=>x.id===id)||{}:{};
   const cOpts=allC.map(c=>`<option value="${c.id}"${s.client_id===c.id?' selected':''}>${c.name}</option>`).join('');
   const pOpts='<option value="">— Sem pacote —</option>'+allP.map(p=>`<option value="${p.id}"${s.package_id===p.id?' selected':''}>${cName(p.client_id)} – ${TIPOS[p.tipo]?.label||p.tipo}</option>`).join('');
@@ -585,9 +646,9 @@ async function saveSessao(id){
 async function delSessao(id){if(!confirm('Excluir sessão?'))return;await sb.from('sessions').delete().eq('id',id);await loadAll();closeModal();renderAgenda();}
 
 // ═══ MODAL PACOTE ════════════════════════════════════════════════════════════
-function openModalPacote(id=null){
+function openModalPacote(id=null,preClientId=null){
   const p=id?allP.find(x=>x.id===id)||{}:{};
-  const cOpts=allC.map(c=>`<option value="${c.id}"${p.client_id===c.id?' selected':''}>${c.name}</option>`).join('');
+  const cOpts=allC.map(c=>`<option value="${c.id}"${(p.client_id||preClientId)===c.id?' selected':''}>${c.name}</option>`).join('');
   openModal(id?'Editar Pacote':'Novo Pacote',
     `<div class="form-group"><label>Cliente *</label><select id="p-c">${cOpts}</select></div>`+
     `<div class="form-row"><div class="form-group"><label>Tipo</label><select id="p-t">${tipoOpts(p.tipo||'psicoterapia')}</select></div><div class="form-group"><label>Total de Sessões</label><input id="p-n" type="number" min="1" value="${p.total_sessoes||10}"/></div></div>`+
