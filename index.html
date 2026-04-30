@@ -411,34 +411,39 @@ function renderClientes(){
   setMain(
     '<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Clientes</h1>'+themeBtn()+'<button class="btn btn-primary" onclick="openModalCliente()">+ Novo Cliente</button></div>'+
     '<div class="card" style="padding:0">'+
-    '<div style="padding:12px 16px;border-bottom:1px solid var(--border)"><div class="search-wrap" style="max-width:100%"><span class="search-icon">🔍</span><input id="busca" placeholder="Buscar cliente..." oninput="filtrarC()" style="border:none;background:transparent;padding-left:30px;box-shadow:none"/></div></div>'+
+    '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">'+
+    '<div class="search-wrap" style="max-width:100%"><span class="search-icon">🔍</span>'+
+    '<input id="busca" placeholder="Buscar cliente..." oninput="filtrarC()" style="border:none;background:transparent;padding-left:30px;box-shadow:none"/></div></div>'+
     '<div id="lista-c">'+tabelaC(allC)+'</div></div>'
   );
 }
 function filtrarC(){
   const q=document.getElementById('busca').value.toLowerCase();
-  document.getElementById('lista-c').innerHTML=tabelaC(allC.filter(c=>c.name.toLowerCase().includes(q)||(c.phone||'').includes(q)||(c.email||'').toLowerCase().includes(q)));
+  document.getElementById('lista-c').innerHTML=tabelaC(allC.filter(c=>
+    c.name.toLowerCase().includes(q)||(c.phone||'').includes(q)||(c.email||'').toLowerCase().includes(q)));
 }
 function tabelaC(list){
-  if(!list.length)return'<div class="empty"><div class="empty-icon">👥</div><p>Nenhuma cliente</p></div>';
-  let rows=list.map(c=>{
-    const npkg=allP.filter(p=>p.client_id===c.id).length;
-    const nreal=allS.filter(s=>s.client_id===c.id&&s.status==='realizada').length;
-    const pkgLabel=npkg===1?'1 pacote':npkg+' pacotes';
-    const sesLabel=nreal===1?'1 realizada':nreal+' realizadas';
+  if(!list.length) return '<div class="empty"><div class="empty-icon">👥</div><p>Nenhuma cliente</p></div>';
+  const rows = list.map(c=>{
+    const npkg = allP.filter(p=>p.client_id===c.id).length;
+    const nreal = allS.filter(s=>s.client_id===c.id&&s.status==='realizada').length;
     return '<tr>'+
-      '<td><div style="display:flex;align-items:center;gap:10px"><div class="client-avatar" style="width:36px;height:36px;font-size:13px">'+initials(c.name)+'</div><strong>'+c.name+'</strong></div></td>'+
+      '<td><div style="display:flex;align-items:center;gap:10px">'+
+        '<div class="client-avatar" style="width:36px;height:36px;font-size:13px">'+initials(c.name)+'</div>'+
+        '<strong>'+c.name+'</strong></div></td>'+
       '<td class="td-muted">'+(c.phone||'—')+'</td>'+
-      '<td><span class="badge badge-blue">'+pkgLabel+'</span></td>'+
-      '<td><span class="badge badge-green">'+sesLabel+'</span></td>'+
+      '<td><span class="badge badge-blue">'+(npkg===1?'1 pacote':npkg+' pacotes')+'</span></td>'+
+      '<td><span class="badge badge-green">'+(nreal===1?'1 realizada':nreal+' realizadas')+'</span></td>'+
       '<td style="white-space:nowrap">'+
-        '<button class="btn btn-sm btn-ghost" onclick="abrirPerfilCliente(\"'+c.id+'\")" title="Ver perfil">👁️</button> '+
-        '<button class="btn btn-sm btn-ghost" onclick="abrirProntuario(\"'+c.id+'\")" title="Prontuário">📋</button> '+
-        '<button class="btn btn-sm btn-ghost" onclick="openModalCliente(\"'+c.id+'\")" title="Editar">✏️</button> '+
-        '<button class="btn btn-sm btn-danger" onclick="delCliente(\"'+c.id+'\")" title="Excluir">🗑️</button>'+
+        '<button class="btn btn-sm btn-ghost" title="Ver perfil" data-cid="'+c.id+'" onclick="abrirPerfilCliente(this.dataset.cid)">👁️</button> '+
+        '<button class="btn btn-sm btn-ghost" title="Prontuário" data-cid="'+c.id+'" onclick="abrirProntuario(this.dataset.cid)">📋</button> '+
+        '<button class="btn btn-sm btn-ghost" title="Editar" data-cid="'+c.id+'" onclick="openModalCliente(this.dataset.cid)">✏️</button> '+
+        '<button class="btn btn-sm btn-danger" title="Excluir" data-cid="'+c.id+'" onclick="delCliente(this.dataset.cid)">🗑️</button>'+
       '</td></tr>';
   }).join('');
-  return'<div class="table-wrap"><table><thead><tr><th>CLIENTE</th><th>TELEFONE</th><th>PACOTES</th><th>SESSÕES</th><th>AÇÕES</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="table-wrap"><table>'+
+    '<thead><tr><th>CLIENTE</th><th>TELEFONE</th><th>PACOTES</th><th>SESSÕES</th><th>AÇÕES</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
 }
 
 function openModalCliente(id=null){
@@ -461,519 +466,131 @@ async function delCliente(id){if(!confirm('Excluir cliente?'))return;await sb.fr
 
 // ═══ SESSÕES / PACOTES ═══════════════════════════════════════════════════════
 function abrirPerfilCliente(cid){
-  const c=allC.find(x=>x.id===cid)||{};
-  const pkgs=allP.filter(p=>p.client_id===cid);
-  const sesC=allS.filter(s=>s.client_id===cid).sort((a,b)=>b.date.localeCompare(a.date)||(b.hora||'').localeCompare(a.hora||''));
-  const real=sesC.filter(s=>s.status==='realizada').length;
-  const falt=sesC.filter(s=>s.status==='falta').length;
-  let body=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="client-avatar" style="width:52px;height:52px;font-size:20px">${initials(c.name)}</div><div><div style="font-size:18px;font-weight:700">${c.name}</div><div style="font-size:12px;color:var(--text2)">${sesC.length} sessões · ${real} realizadas${falt>0?' · '+falt+' falta(s)':''}</div></div></div>`;
-  body+=`<div style="display:flex;gap:8px;margin-bottom:18px"><button class="btn btn-primary btn-sm" onclick="openModalSessao(null,null,'${cid}')">+ Registrar Sessão</button><button class="btn btn-secondary btn-sm" onclick="closeModal();openModalPacote(null,'${cid}')">+ Novo Pacote</button><button class="btn btn-ghost btn-sm" onclick="closeModal();openModalCliente('${cid}')">✏️ Editar</button></div>`;
-  if(pkgs.length){
-    body+=`<div style="font-size:13px;font-weight:700;margin-bottom:10px">📦 Pacotes</div>`;
-    pkgs.forEach(p=>{
-      const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
-      const t=parseInt(p.total_sessoes)||0;
-      const rest=t-r;
-      const pct=t>0?Math.round((r/t)*100):0;
-      const pago=p.pago===true||p.pago==='true';
-      const barCls=pct>=100?'progress-red':pct>=70?'progress-yellow':'progress-green';
-      body+=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px">`;
-      body+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:600">${c.name}</div><span class="badge ${pago?'badge-green':'badge-yellow'}">${pago?'💰 Pago':'⏳ Pendente'}</span></div>`;
-      body+=`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">Total: <strong>${t}</strong> &nbsp; Realizadas: <strong>${r}</strong> &nbsp; Restantes: <strong>${rest}</strong> &nbsp; Valor: <strong>${fmtMoney(p.valor_total)}</strong></div>`;
-      body+=`<div class="progress-bar"><div class="progress-fill ${barCls}" style="width:${Math.min(pct,100)}%"></div></div>`;
-      body+=`</div>`;
-    });
-  }
-  if(sesC.length){
-    body+=`<div style="font-size:13px;font-weight:700;margin:14px 0 10px">📅 Histórico</div>`;
-    body+=`<div class="table-wrap"><table><thead><tr><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>STATUS</th><th></th></tr></thead><tbody>`;
-    sesC.forEach(s=>{
-      body+=`<tr><td>${fmtDate(s.date)}</td><td>${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td><button class="btn btn-sm btn-ghost" onclick="closeModal();openModalSessao('${s.id}')">✏️</button><button class="btn btn-sm btn-danger" onclick="closeModal();delSessao('${s.id}')">🗑️</button></td></tr>`;
-    });
-    body+=`</tbody></table></div>`;
-  }else{
-    body+=`<div class="empty" style="padding:20px"><div class="empty-icon">📅</div><p>Nenhuma sessão ainda</p></div>`;
-  }
-  openModal('Cliente: '+c.name, body);
-}
+  const c = allC.find(x=>x.id===cid)||{};
+  const pkgs = allP.filter(p=>p.client_id===cid);
+  const sesC = allS.filter(s=>s.client_id===cid).sort((a,b)=>b.date.localeCompare(a.date));
+  const real = sesC.filter(s=>s.status==='realizada').length;
+  const falt = sesC.filter(s=>s.status==='falta').length;
 
-function renderSessoes(){
-  const ms=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const year=calDate.getFullYear(),month=calDate.getMonth();
-  const sesMes=allS.filter(s=>{const[y,m]=s.date.split('-').map(Number);return y===year&&(m-1)===month;});
-  // clientes com sessão no mês OU com pacote ativo
-  const cidsSet=new Set([...sesMes.map(s=>s.client_id),...allP.filter(p=>!p.encerrado).map(p=>p.client_id)]);
-  const clientes=[...cidsSet].sort((a,b)=>cName(a).localeCompare(cName(b)));
-
-  let cards='';
-  clientes.forEach(cid=>{
-    const list=sesMes.filter(s=>s.client_id===cid).sort((a,b)=>a.date.localeCompare(b.date)||(a.hora||'').localeCompare(b.hora||''));
-    const ativas=list.filter(s=>s.status==='agendada'||s.status==='parcial');
-    const feitas=list.filter(s=>s.status==='realizada'||s.status==='falta');
-    const uid=cid.replace(/-/g,'').slice(0,8);
-    const realTot=allS.filter(s=>s.client_id===cid&&s.status==='realizada').length;
-    const faltTot=allS.filter(s=>s.client_id===cid&&s.status==='falta').length;
-    let sesLabel='sessões:';
-    if(realTot>0)sesLabel+=' <span style="color:var(--green)">'+realTot+' realizadas</span>';
-    if(faltTot>0)sesLabel+=' · <span style="color:var(--red)">'+faltTot+' falta'+(faltTot>1?'s':'')+'</span>';
-
-    cards+='<div class="card" style="margin-bottom:12px">';
-    // ─ Cabeçalho cliente
-    cards+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:'+((ativas.length||feitas.length)?'12px':'6px')+'">'+
-      '<div class="client-avatar" style="width:40px;height:40px;font-size:15px;cursor:pointer" onclick="abrirPerfilCliente(\""+cid+"\"">'+initials(cName(cid))+'</div>'+
-      '<div style="flex:1"><div style="font-weight:700;font-size:15px">'+cName(cid)+'</div>'+
-      '<div style="font-size:11px;color:var(--text2)">'+sesLabel+'</div></div>'+
-      '<button class="btn btn-sm btn-secondary" onclick="abrirProntuario(\""+cid+"\"" style="gap:4px">📋 Prontuário</button>'+
-      '<button class="btn btn-sm btn-ghost" onclick="abrirPerfilCliente(\""+cid+"\"">Ver perfil →</button>'+
-      '</div>';
-
-    // ─ Tabela de agendadas
-    if(ativas.length){
-      cards+='<div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>PACOTE</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>';
-      ativas.forEach(s=>{
-        const pkg=s.package_id?allP.find(p=>p.id===s.package_id):null;
-        const ordemS=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
-        const totPkg=pkg?parseInt(pkg.total_sessoes)||0:0;
-        cards+='<tr>'+
-          '<td class="td-muted">'+(ordemS&&totPkg?ordemS+'/'+totPkg:'—')+'</td>'+
-          '<td><strong>'+fmtDate(s.date)+'</strong></td>'+
-          '<td>'+(s.hora||'—')+'</td>'+
-          '<td>'+badgeTipo(s.tipo)+'</td>'+
-          '<td class="td-muted">'+(pkg?cName(pkg.client_id):'—')+'</td>'+
-          '<td>'+badgeStatus(s.status)+'</td>'+
-          '<td>'+pgtoBtn(s)+'</td>'+
-          '<td style="white-space:nowrap">'+
-            '<button class="btn btn-sm btn-ghost" onclick="openModalSessao(\""+s.id+"\"">✏️</button> '+
-            '<button class="btn btn-sm btn-danger" onclick="delSessao(\""+s.id+"\"">🗑️</button>'+
-          '</td></tr>';
-      });
-      cards+='</tbody></table></div>';
-    }else if(!feitas.length){
-      cards+='<div style="font-size:12px;color:var(--text3);padding:2px 0 8px">Sem sessões agendadas neste mês</div>';
-    }
-
-    // ─ Realizadas/faltas colapsadas
-    if(feitas.length){
-      const nF=feitas.filter(s=>s.status==='falta').length;
-      cards+='<button class="done-toggle" onclick="toggleDone(\'done-\'+uid,this)">▶ Ver realizadas/faltas ('+feitas.length+(nF?' — '+nF+' falta'+(nF>1?'s':''):'')+')</button>';
-      cards+='<div id="done-'+uid+'" style="display:none"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>';
-      feitas.forEach(s=>{
-        const pkg=s.package_id?allP.find(p=>p.id===s.package_id):null;
-        const ordemS=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
-        const totPkg=pkg?parseInt(pkg.total_sessoes)||0:0;
-        cards+='<tr style="opacity:0.65">'+
-          '<td class="td-muted">'+(ordemS&&totPkg?ordemS+'/'+totPkg:'—')+'</td>'+
-          '<td>'+fmtDate(s.date)+'</td><td>'+(s.hora||'—')+'</td>'+
-          '<td>'+badgeTipo(s.tipo)+'</td>'+
-          '<td>'+badgeStatus(s.status)+'</td>'+
-          '<td>'+pgtoBtn(s)+'</td>'+
-          '<td><button class="btn btn-sm btn-ghost" onclick="openModalSessao(\""+s.id+"\"">✏️</button></td></tr>';
-      });
-      cards+='</tbody></table></div></div>';
-    }
-
-    // ─ Mini badges dos pacotes
-    const pkgsC=allP.filter(p=>p.client_id===cid);
-    if(pkgsC.length){
-      cards+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text3)">Pacotes:</span>';
-      pkgsC.forEach(p=>{
-        const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
-        const t=parseInt(p.total_sessoes)||0;
-        cards+='<span class="badge '+(p.pago?'badge-green':'badge-yellow')+'" style="cursor:pointer" onclick="openModalPacote(\""+p.id+"\"" title="'+(TIPOS[p.tipo]?.label||p.tipo)+'">'+( TIPOS[p.tipo]?.emoji||'📦')+' '+r+'/'+t+' '+(p.pago?'💰':'⏳')+'</span>';
-      });
-      cards+='</div>';
-    }
-    cards+='</div>';
-  });
-
-  // ─ Todos os pacotes
-  const pkgsHtml=allP.map(p=>{
+  const pkgHtml = pkgs.map(p=>{
     const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
     const t=parseInt(p.total_sessoes)||0;
+    const rest=t-r;
     const pct=t>0?Math.round((r/t)*100):0;
     const bc=pct>=100?'progress-red':pct>=70?'progress-yellow':'progress-green';
-    return'<div class="card" style="margin-bottom:10px">'+
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'+
-        '<div class="client-avatar" style="width:36px;height:36px;font-size:13px">'+initials(cName(p.client_id))+'</div>'+
-        '<div style="flex:1"><div style="font-weight:600">'+cName(p.client_id)+'</div>'+
-        '<div style="font-size:11px;color:var(--text3)">'+badgeTipo(p.tipo)+' — '+plural(t)+' — '+fmtMoney(p.valor_total)+'</div></div>'+
-        '<span class="badge '+(p.encerrado?'badge-gray':'badge-green')+'">'+(p.encerrado?'Encerrado':'Ativo')+'</span>'+
-        '<button class="btn btn-sm btn-ghost" onclick="openModalPacote(\""+p.id+"\"">✏️</button>'+
+    const pago=!!p.pago;
+    return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+        '<div style="font-weight:600">'+c.name+'</div>'+
+        '<span class="badge '+(pago?'badge-green':'badge-yellow')+'" style="cursor:pointer" data-pid="'+p.id+'" onclick="togglePago(this.dataset.pid)">'+( pago?'💰 Pago':'⏳ Pendente')+'</span>'+
       '</div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px"><span>'+r+' realizadas de '+t+'</span><span>'+pct+'%</span></div>'+
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">'+
+        'Total: <strong>'+t+'</strong> &nbsp; Realizadas: <strong>'+r+'</strong> &nbsp; Restantes: <strong>'+rest+'</strong> &nbsp; Valor: <strong>'+fmtMoney(p.valor_total)+'</strong>'+
+      '</div>'+
       '<div class="progress-bar"><div class="progress-fill '+bc+'" style="width:'+Math.min(pct,100)+'%"></div></div>'+
     '</div>';
   }).join('');
 
-  setMain(
-    '<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Sessões/Pacotes</h1>'+themeBtn()+
-    '<button class="btn btn-secondary" onclick="openModalPacote()">+ Pacote</button>'+
-    '<button class="btn btn-primary" onclick="openModalSessao()">+ Sessão</button></div>'+
-    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">'+
-    '<button class="cal-nav-btn" onclick="moveMes(-1)">‹</button>'+
-    '<span style="font-weight:600;min-width:90px;text-align:center">'+ms[month]+' '+year+'</span>'+
-    '<button class="cal-nav-btn" onclick="moveMes(1)">›</button>'+
-    '<button class="btn btn-sm btn-ghost" onclick="resetMes()">Hoje</button></div>'+
-    (cards||'<div class="empty"><div class="empty-icon">📋</div><p>Sem sessões ou pacotes neste mês</p></div>')+
-    '<div style="margin:20px 0 10px;font-size:14px;font-weight:600;color:var(--text2)">📦 Todos os Pacotes</div>'+
-    (pkgsHtml||'<div class="empty"><div class="empty-icon">📦</div><p>Nenhum pacote</p></div>')
-  );
-}
+  const sesRows = sesC.map(s=>
+    '<tr>'+
+    '<td>'+fmtDate(s.date)+'</td>'+
+    '<td>'+(s.hora||'—')+'</td>'+
+    '<td>'+badgeTipo(s.tipo)+'</td>'+
+    '<td>'+badgeStatus(s.status)+'</td>'+
+    '<td>'+
+      '<button class="btn btn-sm btn-ghost" data-sid="'+s.id+'" onclick="closeModal();openModalSessao(this.dataset.sid)">✏️</button> '+
+      '<button class="btn btn-sm btn-danger" data-sid="'+s.id+'" onclick="closeModal();delSessao(this.dataset.sid)">🗑️</button>'+
+    '</td></tr>'
+  ).join('');
 
-function moveMes(d){calDate.setMonth(calDate.getMonth()+d);renderSessoes();}
-function resetMes(){calDate=new Date();renderSessoes();}
-function toggleDone(id,btn){const el=document.getElementById(id);if(!el)return;const open=el.style.display!=='none';el.style.display=open?'none':'block';btn.textContent=(open?'▶':'▼')+btn.textContent.slice(1);}
-
-// ═══ AGENDA ══════════════════════════════════════════════════════════════════
-function renderAgenda(){
-  setMain(
-    `<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Agenda</h1>${themeBtn()}<button class="btn btn-primary" onclick="openModalSessao()">+ Nova Sessão</button></div>`+
-    `<div class="cal-wrap">`+
-    `<div class="cal-toolbar"><div class="cal-nav"><button class="cal-nav-btn" onclick="calMove(-1)">‹</button><span class="cal-title" id="cal-title">${calTitle()}</span><button class="cal-nav-btn" onclick="calMove(1)">›</button><button class="cal-today-btn" onclick="calToday()">Hoje</button></div>`+
-    `<div class="cal-view-btns"><button class="cal-view-btn${calView==='month'?' active':''}" onclick="setCalView('month')">Mês</button><button class="cal-view-btn${calView==='week'?' active':''}" onclick="setCalView('week')">Semana</button><button class="cal-view-btn${calView==='list'?' active':''}" onclick="setCalView('list')">Lista</button></div></div>`+
-    `<div id="cal-body">${renderCal()}</div></div>`
-  );
-}
-function calTitle(){
-  const ms=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  if(calView==='week'){const d=new Date(calDate),day=d.getDay(),mon=new Date(d);mon.setDate(d.getDate()-(day===0?6:day-1));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return`${mon.getDate()} – ${sun.getDate()} ${ms[sun.getMonth()]} ${sun.getFullYear()}`;}
-  return`${ms[calDate.getMonth()]} de ${calDate.getFullYear()}`;
-}
-function calMove(d){if(calView==='week'){calDate.setDate(calDate.getDate()+(d*7));}else{calDate.setMonth(calDate.getMonth()+d);}const t=document.getElementById('cal-title');if(t)t.textContent=calTitle();document.getElementById('cal-body').innerHTML=renderCal();}
-function calToday(){calDate=new Date();const t=document.getElementById('cal-title');if(t)t.textContent=calTitle();document.getElementById('cal-body').innerHTML=renderCal();}
-function setCalView(v){calView=v;renderAgenda();}
-function renderCal(){if(calView==='week')return renderWeek();if(calView==='list')return renderList();return renderMonth();}
-function renderMonth(){
-  const y=calDate.getFullYear(),m=calDate.getMonth();
-  const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate();
-  const today=new Date().toISOString().slice(0,10);
-  let h='<div class="month-grid">';
-  ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].forEach(d=>h+=`<div class="month-header">${d}</div>`);
-  const pad=first===0?6:first-1;
-  for(let i=0;i<pad;i++)h+=`<div class="month-day other-month"></div>`;
-  for(let d=1;d<=days;d++){
-    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const dses=allS.filter(s=>s.date===ds).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
-    const isT=ds===today;
-    h+=`<div class="month-day${isT?' today-day':''}" onclick="openModalSessao(null,'${ds}')"><div class="day-num">${d}</div>`;
-    dses.slice(0,3).forEach(s=>{
-      const pkg=s.package_id?allP.find(p=>p.id===s.package_id):null;
-      const n=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
-      const tot=pkg?parseInt(pkg.total_sessoes)||0:0;
-      const lbl=(s.hora?s.hora.slice(0,5)+' ':'')+cName(s.client_id)+(n&&tot?' '+n+'/'+tot:'');
-      h+=`<span class="cal-chip ${s.tipo||'psicoterapia'}${s.status==='realizada'?' realizada':''}${s.status==='falta'?' falta':''}" onclick="event.stopPropagation();openModalSessao('${s.id}')">${lbl}</span>`;
-    });
-    if(dses.length>3)h+=`<span class="cal-more">+${dses.length-3}</span>`;
-    h+=`</div>`;
-  }
-  return h+'</div>';
-}
-function renderWeek(){
-  const d=new Date(calDate),day=d.getDay(),mon=new Date(d);mon.setDate(d.getDate()-(day===0?6:day-1));
-  const dias=[];for(let i=0;i<7;i++){const dd=new Date(mon);dd.setDate(mon.getDate()+i);dias.push(dd);}
-  const today=new Date().toISOString().slice(0,10);
-  const horas=['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
-  const nms=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-  let h=`<div class="week-wrap"><div class="week-time-col"><div style="height:56px;border-bottom:1px solid var(--border)"></div>`;
-  horas.forEach(hr=>h+=`<div class="week-time-cell">${hr}</div>`);
-  h+=`</div><div class="week-days" style="grid-template-columns:repeat(7,1fr)">`;
-  dias.forEach((dt,i)=>{const ds=dt.toISOString().slice(0,10);const isT=ds===today;h+=`<div class="week-day-header${isT?' today':''}"><div class="week-day-name">${nms[i]}</div><div class="week-day-num">${dt.getDate()}</div></div>`;});
-  horas.forEach(hr=>{dias.forEach(dt=>{const ds=dt.toISOString().slice(0,10);const ses=allS.filter(s=>s.date===ds&&(s.hora||'').startsWith(hr.slice(0,2)));h+=`<div class="week-cell" onclick="openModalSessao(null,'${ds}')">`;ses.forEach(s=>h+=`<span class="week-event ${s.tipo||'psicoterapia'}" onclick="event.stopPropagation();openModalSessao('${s.id}')">${cName(s.client_id)}</span>`);h+=`</div>`;});});
-  return h+`</div></div>`;
-}
-function renderList(){
-  const y=calDate.getFullYear(),m=calDate.getMonth();
-  const ses=allS.filter(s=>{const[sy,sm]=s.date.split('-').map(Number);return sy===y&&(sm-1)===m;}).sort((a,b)=>a.date.localeCompare(b.date)||(a.hora||'').localeCompare(b.hora||''));
-  if(!ses.length)return`<div class="empty"><div class="empty-icon">📅</div><p>Sem sessões neste mês</p></div>`;
-  return`<div class="table-wrap"><table><thead><tr><th>DATA</th><th>HORA</th><th>CLIENTE</th><th>TIPO</th><th>STATUS</th><th></th></tr></thead><tbody>`+
-  ses.map(s=>`<tr><td>${fmtDate(s.date)}</td><td>${s.hora||'—'}</td><td>${cName(s.client_id)}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')">✏️</button></td></tr>`).join('')+
-  `</tbody></table></div>`;
-}
-
-// ═══ MODAL SESSÃO ════════════════════════════════════════════════════════════
-function openModalSessao(id=null,dateStr=null,preClientId=null){
-  const s=id?allS.find(x=>x.id===id)||{}:{};
-  const cOpts=allC.map(c=>`<option value="${c.id}"${s.client_id===c.id?' selected':''}>${c.name}</option>`).join('');
-  const pOpts='<option value="">— Sem pacote —</option>'+allP.map(p=>`<option value="${p.id}"${s.package_id===p.id?' selected':''}>${cName(p.client_id)} – ${TIPOS[p.tipo]?.label||p.tipo}</option>`).join('');
-  openModal(id?'Editar Sessão':'Nova Sessão',
-    `<div class="form-row"><div class="form-group"><label>Cliente *</label><select id="s-c">${cOpts}</select></div><div class="form-group"><label>Tipo</label><select id="s-t">${tipoOpts(s.tipo||'psicoterapia')}</select></div></div>`+
-    `<div class="form-row"><div class="form-group"><label>Data *</label><input id="s-d" type="date" value="${s.date||dateStr||''}"/></div><div class="form-group"><label>Horário</label><input id="s-h" type="time" value="${s.hora||''}"/></div></div>`+
-    `<div class="form-row"><div class="form-group"><label>Status</label><select id="s-st"><option value="agendada"${s.status==='agendada'?' selected':''}>Agendada</option><option value="realizada"${s.status==='realizada'?' selected':''}>Realizada</option><option value="falta"${s.status==='falta'?' selected':''}>Falta</option><option value="parcial"${s.status==='parcial'?' selected':''}>Parcial</option></select></div><div class="form-group"><label>Valor (R$)</label><input id="s-v" type="number" step="0.01" value="${s.valor||''}"/></div></div>`+
-    `<div class="form-group"><label>Pacote</label><select id="s-p">${pOpts}</select></div>`+
-    `<div class="form-group"><label>Anotações</label><textarea id="s-o">${s.observacoes||''}</textarea></div>`+
-    `<div class="form-actions">${id?`<button class="btn btn-danger" onclick="delSessao('${id}')">Excluir</button>`:''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveSessao('${id||''}')">Salvar</button></div>`
-  );
-}
-async function saveSessao(id){
-  const data={client_id:document.getElementById('s-c').value,tipo:document.getElementById('s-t').value,date:document.getElementById('s-d').value,hora:document.getElementById('s-h').value||null,status:document.getElementById('s-st').value,valor:parseFloat(document.getElementById('s-v').value)||0,package_id:document.getElementById('s-p').value||null,observacoes:document.getElementById('s-o').value.trim(),user_id:user.id};
-  if(!data.date){alert('Data é obrigatória');return;}
-  if(id){await sb.from('sessions').update(data).eq('id',id);}else{await sb.from('sessions').insert(data);}
-  await loadAll();closeModal();renderAgenda();
-}
-async function delSessao(id){if(!confirm('Excluir sessão?'))return;await sb.from('sessions').delete().eq('id',id);await loadAll();closeModal();renderAgenda();}
-
-// ═══ MODAL PACOTE ════════════════════════════════════════════════════════════
-function openModalPacote(id=null,preClientId=null){
-  const p=id?allP.find(x=>x.id===id)||{}:{};
-  const cOpts=allC.map(c=>`<option value="${c.id}"${(p.client_id||preClientId)===c.id?' selected':''}>${c.name}</option>`).join('');
-  openModal(id?'Editar Pacote':'Novo Pacote',
-    `<div class="form-group"><label>Cliente *</label><select id="p-c">${cOpts}</select></div>`+
-    `<div class="form-row"><div class="form-group"><label>Tipo</label><select id="p-t">${tipoOpts(p.tipo||'psicoterapia')}</select></div><div class="form-group"><label>Total de Sessões</label><input id="p-n" type="number" min="1" value="${p.total_sessoes||10}"/></div></div>`+
-    `<div class="form-row"><div class="form-group"><label>Valor Total (R$)</label><input id="p-v" type="number" step="0.01" value="${p.valor_total||''}"/></div><div class="form-group"><label>Pagamento</label><select id="p-pg"><option value="pix"${p.pagamento==='pix'?' selected':''}>Pix</option><option value="dinheiro"${p.pagamento==='dinheiro'?' selected':''}>Dinheiro</option><option value="cartao"${p.pagamento==='cartao'?' selected':''}>Cartão</option></select></div></div>`+
-    `<div class="form-row"><div class="form-group"><label>Início</label><input id="p-i" type="date" value="${p.data_inicio||''}"/></div><div class="form-group"><label>Status</label><select id="p-e"><option value="false"${!p.encerrado?' selected':''}>Ativo</option><option value="true"${p.encerrado?' selected':''}>Encerrado</option></select></div></div>`+
-    `<div class="form-group" style="margin-top:4px"><label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;font-weight:500"><input type="checkbox" id="p-pg2" style="width:auto" ${p.pago?'checked':''}/> Pagamento recebido</label></div>`+
-    `<div class="form-group"><label>Observações</label><textarea id="p-o">${p.observacoes||''}</textarea></div>`+
-    `<div class="form-actions">${id?`<button class="btn btn-danger" onclick="delPacote('${id}')">Excluir</button>`:''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="savePacote('${id||''}')">Salvar</button></div>`
-  );
-}
-async function savePacote(id){
-  const data={client_id:document.getElementById('p-c').value,tipo:document.getElementById('p-t').value,total_sessoes:parseInt(document.getElementById('p-n').value)||10,valor_total:parseFloat(document.getElementById('p-v').value)||0,pagamento:document.getElementById('p-pg').value,data_inicio:document.getElementById('p-i').value||null,encerrado:document.getElementById('p-e').value==='true',pago:document.getElementById('p-pg2')?.checked||false,observacoes:document.getElementById('p-o').value.trim(),user_id:user.id};
-  if(id){await sb.from('packages').update(data).eq('id',id);}else{await sb.from('packages').insert(data);}
-  await loadAll();closeModal();renderSessoes();
-}
-async function delPacote(id){if(!confirm('Excluir pacote?'))return;await sb.from('sessions').delete().eq('package_id',id);await sb.from('packages').delete().eq('id',id);await loadAll();closeModal();renderSessoes();}
-
-// ═══ ANEXOS ══════════════════════════════════════════════════════════════════
-function renderAnexos(){
-  const grupos={};
-  allD.forEach(d=>{const k=d.client_id||'_';if(!grupos[k])grupos[k]=[];grupos[k].push(d);});
-  const html=Object.entries(grupos).map(([cid,docs])=>`<div class="card" style="margin-bottom:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><div class="client-avatar" style="width:32px;height:32px;font-size:12px">${initials(cid==='_'?'?':cName(cid))}</div><div style="font-weight:600">${cid==='_'?'Sem cliente':cName(cid)}</div><div style="font-size:11px;color:var(--text3);margin-left:4px">${docs.length} arquivo(s)</div></div>`+
-    docs.map(d=>`<div class="anexo-item"><span style="font-size:22px">${fileIcon(d.filename)}</span><div style="flex:1"><div style="font-size:13px;font-weight:500">${d.filename}</div><div style="font-size:11px;color:var(--text3)">${d.description||''}${d.size_bytes?' · '+fmtSize(d.size_bytes):''}</div></div><a href="${d.url}" download="${d.filename}" class="btn btn-sm btn-ghost">⬇️</a><button class="btn btn-sm btn-danger" onclick="delAnexo('${d.id}','${d.storage_path||''}')">🗑️</button></div>`).join('')+
-    `</div>`).join('');
-  setMain(`<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Anexos 📁</h1>${themeBtn()}<button class="btn btn-primary" onclick="openModalAnexo()">+ Novo Anexo</button></div>`+(html||'<div class="empty"><div class="empty-icon">📁</div><p>Nenhum anexo</p></div>'));
-}
-function openModalAnexo(){
-  const cOpts='<option value="">— Sem cliente —</option>'+allC.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  openModal('Novo Anexo',
-    `<div class="form-group"><label>Cliente</label><select id="ax-c">${cOpts}</select></div>`+
-    `<div class="form-group"><label>Descrição</label><input id="ax-d" placeholder="Laudo, contrato..."/></div>`+
-    `<div class="form-group"><label>Arquivo</label><div class="upload-area" onclick="document.getElementById('ax-f').click()"><div style="font-size:28px;margin-bottom:6px">📎</div><div style="color:var(--text2);font-size:13px">Clique para selecionar</div><div style="color:var(--text3);font-size:11px;margin-top:3px">PDF, Word, Excel, Imagens — máx. 10MB</div><input type="file" id="ax-f" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt" style="display:none" onchange="this.nextElementSibling.textContent='✅ '+this.files[0]?.name"/></div><div id="ax-lbl" style="font-size:12px;color:var(--green);margin-top:5px"></div></div>`+
-    `<div class="form-actions"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarAnexo()">Enviar</button></div>`
-  );
-}
-async function salvarAnexo(){
-  if(_enviando)return;
-  const file=document.getElementById('ax-f')?.files[0];
-  if(!file){alert('Selecione um arquivo');return;}
-  if(file.size>10*1024*1024){alert('Máx. 10MB');return;}
-  const cid=document.getElementById('ax-c').value||null;
-  const desc=document.getElementById('ax-d').value.trim();
-  _enviando=true;closeModal();toast('⏳ Enviando...','success',8000);
-  const ext=file.name.split('.').pop().toLowerCase();
-  const mime=MIME[ext]||file.type||'application/octet-stream';
-  const path=user.id+'/'+Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-  try{
-    const {error:uErr}=await sb.storage.from('documents').upload(path,file,{contentType:mime});
-    if(uErr)throw uErr;
-    const {data:{publicUrl}}=sb.storage.from('documents').getPublicUrl(path);
-    await sb.from('documents').insert({client_id:cid,filename:file.name,description:desc,url:publicUrl,storage_path:path,size_bytes:file.size,user_id:user.id});
-    toast('✅ Enviado!','success');await loadAll();renderAnexos();
-  }catch(e){toast('❌ Erro: '+e.message,'error');}
-  finally{_enviando=false;}
-}
-async function delAnexo(id,path){
-  if(!confirm('Excluir anexo?'))return;
-  if(path)await sb.storage.from('documents').remove([path]);
-  await sb.from('documents').delete().eq('id',id);
-  await loadAll();renderAnexos();
-}
-
-// ═══ NOTAS ═══════════════════════════════════════════════════════════════════
-function renderNotas(){
-  setMain(`<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Notas 📝</h1>${themeBtn()}<button class="btn btn-primary" onclick="criarNota()">+ Nova Nota</button></div><div id="notas-list">Carregando...</div>`);
-  loadNotas();
-}
-async function loadNotas(){
-  const cached=localStorage.getItem('ls_notes');
-  if(cached)try{notasData=JSON.parse(cached);renderNotasList();}catch(e){}
-  const {data}=await sb.from('notes').select('*').eq('user_id',user.id).order('updated_at',{ascending:false});
-  notasData={};(data||[]).forEach(n=>notasData[n.id]=n);
-  localStorage.setItem('ls_notes',JSON.stringify(notasData));renderNotasList();
-}
-function renderNotasList(){
-  const el=document.getElementById('notas-list');if(!el)return;
-  const notas=Object.values(notasData);
-  if(!notas.length){el.innerHTML='<div class="empty"><div class="empty-icon">📝</div><p>Nenhuma nota ainda</p></div>';return;}
-  el.innerHTML=notas.map(n=>`<div class="note-card" id="nc-${n.id}"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><input style="background:none;border:none;font-size:14px;font-weight:600;color:var(--text);padding:0;flex:1" value="${(n.title||'').replace(/"/g,'&quot;')}" placeholder="Título" onchange="updateNota('${n.id}','title',this.value)"/><button class="btn btn-sm btn-danger" onclick="delNota('${n.id}')">🗑️</button></div><textarea style="width:100%;background:none;border:none;color:var(--text2);font-size:13px;resize:none;min-height:70px;font-family:inherit" placeholder="Escreva aqui..." oninput="onNotaInput('${n.id}','conteudo',this.value)">${n.conteudo||''}</textarea><div class="note-status" id="ns-${n.id}">${n.updated_at?fmtDate(n.updated_at.slice(0,10)):''}</div></div>`).join('');
-}
-function onNotaInput(id,field,val){clearTimeout(noteTimers[id]);const c=document.getElementById('nc-'+id),s=document.getElementById('ns-'+id);if(c)c.className='note-card saving';if(s)s.textContent='✏️ Digitando...';noteTimers[id]=setTimeout(()=>updateNota(id,field,val),2000);}
-async function updateNota(id,field,val){const s=document.getElementById('ns-'+id),c=document.getElementById('nc-'+id);await sb.from('notes').update({[field]:val,updated_at:new Date().toISOString()}).eq('id',id);if(notasData[id]){notasData[id][field]=val;localStorage.setItem('ls_notes',JSON.stringify(notasData));}if(c)c.className='note-card saved';if(s)s.textContent='✅ Salvo!';}
-async function criarNota(){const {data}=await sb.from('notes').insert({title:'Nova Nota',conteudo:'',user_id:user.id}).select().single();if(data){notasData[data.id]=data;renderNotasList();}}
-async function delNota(id){if(!confirm('Excluir nota?'))return;await sb.from('notes').delete().eq('id',id);delete notasData[id];localStorage.setItem('ls_notes',JSON.stringify(notasData));renderNotasList();}
-
-// ═══ FINANCEIRO ══════════════════════════════════════════════════════════════
-function renderFinanceiro(){
-  const hoje=new Date();
-  const y=hoje.getFullYear(),m=hoje.getMonth();
-  const ms=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const mesNome=ms[m]+' de '+y;
-  const mesAtual=y+'-'+String(m+1).padStart(2,'0');
-
-  // Sessões realizadas/parcial neste mês
-  const sesMes=allS.filter(s=>{
-    if(s.status!=='realizada'&&s.status!=='parcial')return false;
-    const[sy,sm]=s.date.split('-').map(Number);
-    return sy===y&&(sm-1)===m;
-  });
-  const recMes=sesMes.reduce((a,s)=>a+(parseFloat(s.valor)||0),0);
-  const recTotal=allS.filter(s=>s.status==='realizada'||s.status==='parcial').reduce((a,s)=>a+(parseFloat(s.valor)||0),0);
-
-  // Pendentes = pacotes sem pago (undefined, null ou false)
-  const pendentes=allP.filter(p=>!p.pago&&!p.encerrado);
-  const totPend=pendentes.reduce((a,p)=>a+(parseFloat(p.valor_total)||0),0);
-
-  // Histórico por mês (baseado em sessões realizadas)
-  const porMes={};
-  allS.filter(s=>s.status==='realizada'||s.status==='parcial').forEach(s=>{
-    const ym=s.date.slice(0,7);
-    porMes[ym]=(porMes[ym]||0)+(parseFloat(s.valor)||0);
-  });
-  const mesesHist=Object.keys(porMes).sort().reverse();
-
-  // Por tipo
-  const porTipo={};
-  allS.filter(s=>s.status==='realizada').forEach(s=>{
-    porTipo[s.tipo]=(porTipo[s.tipo]||0)+(parseFloat(s.valor)||0);
-  });
-
-  setMain(
-    '<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Financeiro</h1>'+themeBtn()+'</div>'+
-    '<div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:10px">📅 Resumo de '+mesNome+'</div>'+
-    '<div class="grid-4" style="margin-bottom:20px">'+
-      '<div class="stat-card green"><div class="stat-icon">💵</div><div class="stat-val">'+fmtMoney(recMes)+'</div><div class="stat-label">RECEBIDO ESTE MÊS</div></div>'+
-      '<div class="stat-card yellow"><div class="stat-icon">♦️</div><div class="stat-val">R$ 0,00</div><div class="stat-label">1ª PARCELA ESTE MÊS</div></div>'+
-      '<div class="stat-card blue"><div class="stat-icon">⏳</div><div class="stat-val">'+fmtMoney(totPend)+'</div><div class="stat-label">A RECEBER ESTE MÊS</div></div>'+
-      '<div class="stat-card purple"><div class="stat-icon">📊</div><div class="stat-val">'+fmtMoney(recTotal)+'</div><div class="stat-label">TOTAL RECEBIDO</div></div>'+
+  const body =
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'+
+      '<div class="client-avatar" style="width:52px;height:52px;font-size:20px">'+initials(c.name)+'</div>'+
+      '<div><div style="font-size:18px;font-weight:700">'+c.name+'</div>'+
+      '<div style="font-size:12px;color:var(--text2)">'+sesC.length+' sessões · '+real+' realizadas'+(falt>0?' · '+falt+' falta(s)':'')+'</div></div>'+
     '</div>'+
-
-    '<div class="grid-2" style="margin-bottom:20px">'+
-    '<div class="card">'+
-      '<div class="section-title" style="margin-bottom:14px">📅 Histórico por Mês</div>'+
-      '<div class="table-wrap"><table><thead><tr><th>MÊS</th><th style="text-align:right">RECEITA RECEBIDA</th></tr></thead><tbody>'+
-      (mesesHist.length?mesesHist.map(ym=>{
-        const[sy,sm]=ym.split('-').map(Number);
-        const cur=ym===mesAtual;
-        return'<tr'+(cur?' style="background:rgba(52,217,138,0.05)"':'')+'>'+
-          '<td>'+(cur?'🟢 ':'')+ms[sm-1]+' de '+sy+(cur?' (atual)':'')+'</td>'+
-          '<td style="text-align:right;color:var(--green);font-weight:600">'+fmtMoney(porMes[ym])+'</td></tr>';
-      }).join(''):'<tr><td colspan="2" style="text-align:center;color:var(--text3)">Sem histórico ainda</td></tr>')+
-      '</tbody></table></div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:18px">'+
+      '<button class="btn btn-primary btn-sm" data-cid="'+cid+'" onclick="closeModal();openModalSessao(null,null,this.dataset.cid)">+ Registrar Sessão</button>'+
+      '<button class="btn btn-secondary btn-sm" data-cid="'+cid+'" onclick="closeModal();openModalPacote(null,this.dataset.cid)">+ Novo Pacote</button>'+
+      '<button class="btn btn-ghost btn-sm" data-cid="'+cid+'" onclick="closeModal();openModalCliente(this.dataset.cid)">✏️ Editar</button>'+
     '</div>'+
-    '<div class="card">'+
-      '<div class="section-title" style="margin-bottom:14px">Por tipo de serviço</div>'+
-      (Object.entries(porTipo).length?Object.entries(porTipo).map(([t,v])=>
-        '<div class="ds-item">'+
-        '<div style="width:3px;height:30px;border-radius:99px;background:'+(t==='psicoterapia'?'var(--blue)':t==='tarot'?'var(--green)':t==='reiki'?'var(--purple)':t==='astrologia'?'var(--yellow)':'var(--orange)')+';flex-shrink:0"></div>'+
-        '<div style="flex:1">'+(TIPOS[t]?.emoji||'')+'  '+(TIPOS[t]?.label||t)+'</div>'+
-        '<div style="font-weight:600">'+fmtMoney(v)+'</div></div>'
-      ).join(''):'<div class="empty" style="padding:20px">Sem dados ainda</div>')+
-    '</div></div>'+
-
-    '<div class="card">'+
-      '<div class="section-title" style="margin-bottom:14px">⏳ Pagamentos Pendentes</div>'+
-      (pendentes.length?
-        '<div class="table-wrap"><table><thead><tr><th>CLIENTE</th><th>PACOTE</th><th>VALOR</th><th>STATUS</th><th>DATA</th><th>AÇÃO</th></tr></thead><tbody>'+
-        pendentes.map(p=>'<tr>'+
-          '<td><strong>'+cName(p.client_id)+'</strong></td>'+
-          '<td class="td-muted">'+cName(p.client_id)+'</td>'+
-          '<td style="color:var(--yellow);font-weight:600">'+fmtMoney(p.valor_total)+'</td>'+
-          '<td><span class="badge badge-yellow">⏳ Pendente</span></td>'+
-          '<td class="td-muted">—</td>'+
-          '<td><button class="btn btn-sm btn-primary" data-pid="'+p.id+'" onclick="marcarPagoEl(this)">Marcar pago</button></td>'+
-        '</tr>').join('')+'</tbody></table></div>'
-      :'<div class="empty" style="padding:20px"><div class="empty-icon">✅</div><p>Nenhum pagamento pendente!</p></div>')+
-    '</div>'
-  );
-}
-
-async function marcarPago(id){await sb.from('packages').update({pago:true}).eq('id',id);await loadAll();renderFinanceiro();toast('💰 Pagamento registrado!');}
-
-// ═══ CONFIG ══════════════════════════════════════════════════════════════════
-function renderConfig(){
-  setMain(
-    `<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Configurações</h1>${themeBtn()}</div>`+
-    `<div class="card" style="max-width:480px"><div class="section-title" style="margin-bottom:14px">Conta</div><div class="form-group"><label>Email</label><input value="${user?.email||''}" readonly style="opacity:0.6"/></div><div class="form-group"><label>Nova Senha</label><input id="cfg-p" type="password" placeholder="••••••••"/></div><button class="btn btn-primary" onclick="changePass()">Alterar Senha</button><hr style="border:none;border-top:1px solid var(--border);margin:20px 0"/><div class="section-title" style="margin-bottom:10px">Sobre</div><p style="color:var(--text2);font-size:13px">🌙 <strong>Lua Selva</strong> — Sistema de Gestão de Consultório<br/>Psicoterapia · Tarot · Reiki · Barra de Access · Astrologia</p><hr style="border:none;border-top:1px solid var(--border);margin:20px 0"/><button class="btn btn-danger" onclick="doLogout()">Sair da conta</button></div>`
-  );
-}
-async function changePass(){const p=document.getElementById('cfg-p').value;if(!p||p.length<6){alert('Mínimo 6 caracteres');return;}const {error}=await sb.auth.updateUser({password:p});if(error)alert('Erro: '+error.message);else alert('Senha alterada!');}
-
-
-async function togglePgtoSessao(sid){
-  const s=allS.find(x=>x.id===sid);if(!s)return;
-  // Se tem pacote, altera o pago do pacote
-  if(s.package_id){
-    const p=allP.find(x=>x.id===s.package_id);if(!p)return;
-    const novo=!(p.pago===true||p.pago==='true');
-    await sb.from('packages').update({pago:novo}).eq('id',s.package_id);
-    toast(novo?'💰 Pacote marcado como pago!':'⏳ Pacote marcado como pendente!');
-  }else{
-    const novo=!(s.pago===true||s.pago==='true');
-    await sb.from('sessions').update({pago:novo}).eq('id',sid);
-    toast(novo?'💰 Sessão marcada como paga!':'⏳ Sessão marcada como pendente!');
-  }
-  await loadAll();renderSessoes();
-}
-function pgtoBtn(s){
-  const pago=s.package_id?(allP.find(p=>p.id===s.package_id)?.pago===true):( s.pago===true||s.pago==='true');
-  return `<span class="badge ${pago?'badge-green':'badge-yellow'}" style="cursor:pointer" onclick="togglePgtoSessao('${s.id}')" title="Clique para alternar">${pago?'💰 Pago':'⏳ Pendente'}</span>`;
+    (pkgs.length?'<div style="font-size:13px;font-weight:700;margin-bottom:10px">📦 Pacotes</div>'+pkgHtml:'')+
+    '<div style="font-size:13px;font-weight:700;margin:14px 0 10px">📅 Histórico</div>'+
+    (sesC.length?
+      '<div class="table-wrap"><table><thead><tr><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>STATUS</th><th></th></tr></thead>'+
+      '<tbody>'+sesRows+'</tbody></table></div>'
+      :'<div class="empty" style="padding:20px"><div class="empty-icon">📅</div><p>Nenhuma sessão ainda.<br>Crie a primeira sessão clicando em <strong>+ Registrar Sessão</strong> acima.</p></div>');
+  openModal('Cliente: '+c.name, body);
 }
 
 function abrirProntuario(cid){
-  const c=allC.find(x=>x.id===cid)||{};
-  const pkgs=allP.filter(p=>p.client_id===cid);
-  const wrap=document.createElement('div');
+  const c = allC.find(x=>x.id===cid)||{};
+  const pkgs = allP.filter(p=>p.client_id===cid);
   if(!pkgs.length){
-    wrap.innerHTML='<div class="empty"><div class="empty-icon">📦</div><p>Nenhum pacote cadastrado.</p><button class="btn btn-primary" style="margin-top:12px" id="pron-criar-pkg">+ Criar Pacote</button></div>';
-    const modal=document.createElement('div');
-    modal.appendChild(wrap);
-    openModal('📋 Prontuário — '+c.name, modal.innerHTML);
-    setTimeout(()=>{
-      const btn=document.getElementById('pron-criar-pkg');
-      if(btn)btn.onclick=()=>{closeModal();openModalPacote(null,cid);};
-    },0);
+    openModal('📋 Prontuário — '+c.name,
+      '<div class="empty"><div class="empty-icon">📦</div>'+
+      '<p>Nenhum pacote cadastrado para esta cliente.</p>'+
+      '<button class="btn btn-primary" style="margin-top:12px" data-cid="'+cid+'" onclick="closeModal();openModalPacote(null,this.dataset.cid)">+ Criar Pacote</button></div>');
     return;
   }
+  const wrap = document.createElement('div');
   pkgs.forEach(p=>{
-    const sessoesPkg=allS.filter(s=>s.package_id===p.id).sort((a,b)=>a.date.localeCompare(b.date));
-    const r=sessoesPkg.filter(s=>s.status==='realizada').length;
-    const t=parseInt(p.total_sessoes)||0;
-    const pago=!!p.pago;
-    const dataInicio=p.data_inicio?fmtDate(p.data_inicio):'?';
-    const dataFim=sessoesPkg.length?fmtDate(sessoesPkg[sessoesPkg.length-1].date):'?';
-    const card=document.createElement('div');
-    card.style.cssText='background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px';
-    const pgBadge=document.createElement('span');
-    pgBadge.className='badge '+(pago?'badge-green':'badge-yellow');
-    pgBadge.style.cursor='pointer';
-    pgBadge.textContent=pago?'💰 Pago':'⏳ Pendente';
-    pgBadge.onclick=()=>togglePago(p.id);
-    const header=document.createElement('div');
-    header.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px';
-    const title=document.createElement('strong');
-    title.textContent=c.name+' ('+dataInicio+' – '+dataFim+')';
-    header.appendChild(title);header.appendChild(pgBadge);
-    const info=document.createElement('div');
-    info.style.cssText='font-size:12px;color:var(--text2);margin-bottom:10px';
-    info.textContent=r+'/'+t+' sessões · '+fmtMoney(p.valor_total);
-    const lbl=document.createElement('label');
-    lbl.style.cssText='font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px';
-    lbl.textContent='Anotações clínicas';
-    const ta=document.createElement('textarea');
-    ta.id='pron-'+p.id;
-    ta.style.cssText='width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-size:13px;font-family:inherit;min-height:100px;resize:vertical';
-    ta.placeholder='Anotações clínicas...';
-    ta.value=p.observacoes||'';
-    const saveRow=document.createElement('div');
-    saveRow.style.cssText='text-align:right;margin-top:8px';
-    const saveBtn=document.createElement('button');
-    saveBtn.className='btn btn-primary btn-sm';
-    saveBtn.textContent='💾 Salvar';
-    saveBtn.onclick=()=>salvarProntuario(p.id);
+    const sessoesPkg = allS.filter(s=>s.package_id===p.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const r = sessoesPkg.filter(s=>s.status==='realizada').length;
+    const t = parseInt(p.total_sessoes)||0;
+    const pago = !!p.pago;
+    const dataInicio = p.data_inicio?fmtDate(p.data_inicio):(sessoesPkg.length?fmtDate(sessoesPkg[0].date):'?');
+    const dataFim = sessoesPkg.length?fmtDate(sessoesPkg[sessoesPkg.length-1].date):'?';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px';
+
+    const pgBadge = document.createElement('span');
+    pgBadge.className = 'badge '+(pago?'badge-green':'badge-yellow');
+    pgBadge.style.cursor = 'pointer';
+    pgBadge.textContent = pago?'💰 Pago':'⏳ Pendente';
+    pgBadge.dataset.pid = p.id;
+    pgBadge.onclick = function(){ togglePago(this.dataset.pid); };
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px';
+    const title = document.createElement('strong');
+    title.textContent = c.name+' ('+dataInicio+' – '+dataFim+')';
+    header.appendChild(title); header.appendChild(pgBadge);
+
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:12px;color:var(--text2);margin-bottom:10px';
+    info.textContent = r+'/'+t+' sessões · '+fmtMoney(p.valor_total);
+
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px';
+    lbl.textContent = 'Anotações clínicas';
+
+    const ta = document.createElement('textarea');
+    ta.id = 'pron-'+p.id;
+    ta.style.cssText = 'width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-size:13px;font-family:inherit;min-height:100px;resize:vertical;outline:none';
+    ta.placeholder = 'Anotações clínicas...';
+    ta.value = p.observacoes||'';
+
+    const saveRow = document.createElement('div');
+    saveRow.style.cssText = 'text-align:right;margin-top:8px';
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-primary btn-sm';
+    saveBtn.innerHTML = '💾 Salvar';
+    saveBtn.dataset.pid = p.id;
+    saveBtn.onclick = function(){ salvarProntuario(this.dataset.pid); };
     saveRow.appendChild(saveBtn);
-    card.appendChild(header);card.appendChild(info);card.appendChild(lbl);card.appendChild(ta);card.appendChild(saveRow);
+
+    card.appendChild(header); card.appendChild(info); card.appendChild(lbl);
+    card.appendChild(ta); card.appendChild(saveRow);
     wrap.appendChild(card);
   });
-  openModal('📋 Prontuário — '+c.name, wrap.outerHTML);
+  openModal('📋 Prontuário — '+c.name, wrap.innerHTML);
+  // Re-bind events after innerHTML
+  pkgs.forEach(p=>{
+    const ta = document.getElementById('pron-'+p.id);
+    if(ta && p.observacoes) ta.value = p.observacoes;
+  });
 }
 
 async function togglePago(pkgId){
