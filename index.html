@@ -703,6 +703,7 @@ var spMonth = new Date();
 function renderSessoes() {
   var MS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var y = spMonth.getFullYear(), m = spMonth.getMonth();
+  // Show ALL clients with packages OR sessions this month
   var sesMes = allSessions.filter(function(s){
     var parts = s.date.split('-').map(Number);
     return parts[0]===y && (parts[1]-1)===m;
@@ -714,7 +715,8 @@ function renderSessoes() {
 
   var cardsHtml = '';
   cids.forEach(function(cid) {
-    var list = sesMes.filter(function(s){ return s.client_id===cid; }).sort(function(a,b){
+    // Show ALL sessions for this client (not just current month)
+    var list = allSessions.filter(function(s){ return s.client_id===cid; }).sort(function(a,b){
       return a.date.localeCompare(b.date) || (a.hora||'').localeCompare(b.hora||'');
     });
     var ativas = list.filter(function(s){ return s.status==='agendada'||s.status==='parcial'; });
@@ -741,7 +743,8 @@ function renderSessoes() {
         row += '<td>' + (s.hora||'—') + '</td>';
         row += '<td>' + badgeTipo(s.tipo) + '</td>';
         row += '<td class="td-muted">' + (pkg?clientName(pkg.client_id):'—') + '</td>';
-        row += '<td>' + badgeStatus(s.status) + '</td>';
+        var nextStatus = s.status==='agendada'?'realizada':s.status==='realizada'?'falta':s.status==='falta'?'agendada':'agendada';
+        row += '<td><span style="cursor:pointer" title="Clique para alterar status" data-sid="' + s.id + '" data-next="' + nextStatus + '" onclick="quickStatus(this.dataset.sid,this.dataset.next)">' + badgeStatus(s.status) + '</span></td>';
         row += '<td><span class="badge ' + (pg?'badge-green':'badge-yellow') + '" style="cursor:pointer" onclick="togglePgto(\'' + s.id + '\')">' + (pg?'💰 Pago':'⏳ Pendente') + '</span></td>';
         row += '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openSessaoModal(\'' + s.id + '\')">✏️</button> <button class="btn btn-danger btn-sm" onclick="deleteSessao(\'' + s.id + '\')">🗑️</button></td>';
         row += '</tr>';
@@ -749,7 +752,7 @@ function renderSessoes() {
       }).join('');
     }
 
-    var thead = '<thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>PACOTE</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead>';
+    var thead = '<thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>PACOTE</th><th title="Clique para alterar">STATUS ✎</th><th>PGTO</th><th>AÇÕES</th></tr></thead>';
 
     var card = '<div class="card" style="margin-bottom:11px">';
     // Header
@@ -821,9 +824,7 @@ function renderSessoes() {
   html += '<button class="cal-nav-btn" onclick="spMoveMes(1)">›</button>';
   html += '<button class="btn btn-ghost btn-sm" onclick="spReset()">Hoje</button>';
   html += '</div>';
-  html += (cardsHtml || '<div class="empty"><div class="empty-icon">📋</div><p>Sem sessões ou pacotes neste mês</p></div>');
-  html += '<div style="margin:18px 0 9px;font-size:13px;font-weight:600;color:var(--text2)">📦 Todos os Pacotes</div>';
-  html += (pkgsHtml || '<div class="empty"><div class="empty-icon">📦</div><p>Nenhum pacote</p></div>');
+  html += (cardsHtml || '<div class="empty"><div class="empty-icon">📋</div><p>Sem clientes com sessões ou pacotes ativos neste mês</p></div>');
   setMain(html);
 }
 
@@ -837,6 +838,12 @@ function toggleDoneSection(sectionId, btnId) {
   var open = el.style.display !== 'none';
   el.style.display  = open ? 'none' : 'block';
   btn.textContent   = (open ? '▶' : '▼') + btn.textContent.slice(1);
+}
+
+async function quickStatus(sid, nextStatus) {
+  await sb.from('sessions').update({ status: nextStatus }).eq('id', sid);
+  await loadAll(); renderSessoes();
+  showToast('✅ Status: ' + nextStatus);
 }
 
 async function togglePgto(sid) {
