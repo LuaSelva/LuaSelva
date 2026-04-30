@@ -271,8 +271,8 @@ const TIPOS = {
   psicoterapia: {label:'Psicoterapia',           emoji:'🧠', badge:'badge-psico'},
   tarot:        {label:'Leitura de Tarot/Baralho',emoji:'🃏', badge:'badge-tarot'},
   reiki:        {label:'Reiki',                   emoji:'🌿', badge:'badge-reiki'},
-  barras:       {label:'Barra de Access',         emoji:'✨', badge:'badge-barras'},
-  astrologia:   {label:'Astrologia',              emoji:'⭐', badge:'badge-astro'},
+  barras:       {label:'Barra de Access',         emoji:'🖐️', badge:'badge-barras'},
+  astrologia:   {label:'Astrologia',              emoji:'🔮', badge:'badge-astro'},
 };
 function tipoOpts(sel=''){
   return Object.entries(TIPOS).map(([k,v])=>`<option value="${k}"${sel===k?' selected':''}>${v.emoji} ${v.label}</option>`).join('');
@@ -479,64 +479,87 @@ function abrirPerfilCliente(cid){
 function renderSessoes(){
   const ms=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const year=calDate.getFullYear(),month=calDate.getMonth();
-  const ses=allS.filter(s=>{const[y,m]=s.date.split('-').map(Number);return y===year&&(m-1)===month;}).sort((a,b)=>a.date.localeCompare(b.date)||(a.hora||'').localeCompare(b.hora||''));
-
-  // Todos os clientes que têm sessões no mês OU têm pacotes
-  const cidsComSessao=new Set(ses.map(s=>s.client_id));
-  const cidsComPacote=new Set(allP.map(p=>p.client_id));
-  const todosCids=new Set([...cidsComSessao,...cidsComPacote]);
-
-  const grupos={};
-  ses.forEach(s=>{if(!grupos[s.client_id])grupos[s.client_id]=[];grupos[s.client_id].push(s);});
+  // Sessões do mês
+  const sesMes=allS.filter(s=>{const[y,m]=s.date.split('-').map(Number);return y===year&&(m-1)===month;});
+  // Todos clientes que têm sessão no mês OU pacote ativo
+  const cidsSet=new Set([...sesMes.map(s=>s.client_id),...allP.map(p=>p.client_id)]);
+  const clientes=[...cidsSet].sort((a,b)=>cName(a).localeCompare(cName(b)));
 
   let cards='';
-  [...todosCids].sort((a,b)=>cName(a).localeCompare(cName(b))).forEach(cid=>{
-    const list=grupos[cid]||[];
+  clientes.forEach(cid=>{
+    const list=sesMes.filter(s=>s.client_id===cid).sort((a,b)=>a.date.localeCompare(b.date)||(a.hora||'').localeCompare(b.hora||''));
     const ativas=list.filter(s=>s.status==='agendada'||s.status==='parcial');
     const feitas=list.filter(s=>s.status==='realizada'||s.status==='falta');
     const uid=cid.replace(/-/g,'').slice(0,8);
-    const real=allS.filter(s=>s.client_id===cid&&s.status==='realizada').length;
-    const falt=allS.filter(s=>s.client_id===cid&&s.status==='falta').length;
-    const pkgsC=allP.filter(p=>p.client_id===cid);
+    const realTot=allS.filter(s=>s.client_id===cid&&s.status==='realizada').length;
+    const faltTot=allS.filter(s=>s.client_id===cid&&s.status==='falta').length;
+
     cards+=`<div class="card" style="margin-bottom:12px">`;
-    cards+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:${list.length||pkgsC.length?'12px':'0'}">`;
+    // Header
+    cards+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">`;
     cards+=`<div class="client-avatar" style="width:38px;height:38px;font-size:14px;cursor:pointer" onclick="abrirPerfilCliente('${cid}')">${initials(cName(cid))}</div>`;
-    cards+=`<div style="flex:1;cursor:pointer" onclick="abrirPerfilCliente('${cid}')"><div style="font-weight:600">${cName(cid)}</div>`;
-    cards+=`<div style="font-size:11px;color:var(--text2)">sessões: ${real>0?`<span style="color:var(--green)">${real} realizadas</span>`:''} ${falt>0?`· <span style="color:var(--red)">${falt} falta${falt>1?'s':''}</span>`:''}</div></div>`;
+    cards+=`<div style="flex:1"><div style="font-weight:600">${cName(cid)}</div>`;
+    cards+=`<div style="font-size:11px;color:var(--text2)">sessões:${realTot>0?' <span style="color:var(--green)">'+realTot+' realizadas</span>':''}${faltTot>0?' · <span style="color:var(--red)">'+faltTot+' falta'+(faltTot>1?'s':'')+'</span>':''}</div></div>`;
     cards+=`<button class="btn btn-sm btn-ghost" onclick="abrirPerfilCliente('${cid}')">Ver perfil →</button></div>`;
+
+    // Tabela de agendadas
     if(ativas.length){
-      cards+=`<div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>TIPO</th><th>STATUS</th><th></th></tr></thead><tbody>`;
+      cards+=`<div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>PACOTE</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>`;
       ativas.forEach(s=>{
         const pkg=s.package_id?allP.find(p=>p.id===s.package_id):null;
-        const n=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
-        const tot2=pkg?parseInt(pkg.total_sessoes)||0:0;
-        cards+=`<tr><td class="td-muted">${n&&tot2?n+'/'+tot2:'—'}</td><td><strong>${fmtDate(s.date)}</strong></td><td>${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')">✏️</button></td></tr>`;
+        const sesOrdem=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
+        const totPkg=pkg?parseInt(pkg.total_sessoes)||0:0;
+        cards+=`<tr>`;
+        cards+=`<td class="td-muted">${sesOrdem&&totPkg?sesOrdem+'/'+totPkg:'—'}</td>`;
+        cards+=`<td><strong>${fmtDate(s.date)}</strong></td>`;
+        cards+=`<td>${s.hora||'—'}</td>`;
+        cards+=`<td>${badgeTipo(s.tipo)}</td>`;
+        cards+=`<td class="td-muted">${pkg?cName(pkg.client_id):'—'}</td>`;
+        cards+=`<td>${badgeStatus(s.status)}</td>`;
+        cards+=`<td>${pgtoBtn(s)}</td>`;
+        cards+=`<td style="white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')" title="Editar">✏️</button> <button class="btn btn-sm btn-danger" onclick="delSessao('${s.id}')" title="Excluir">🗑️</button></td>`;
+        cards+=`</tr>`;
       });
       cards+=`</tbody></table></div>`;
-    }else if(!pkgsC.length){
-      cards+=`<div style="font-size:12px;color:var(--text3);padding:4px 0">Sem sessões neste mês</div>`;
+    }else{
+      // Sem sessões agendadas no mês mas tem pacote
+      const pkgsC=allP.filter(p=>p.client_id===cid);
+      if(pkgsC.length&&!feitas.length){
+        cards+=`<div style="font-size:12px;color:var(--text3);padding:4px 0">Sem sessões agendadas neste mês</div>`;
+      }
     }
+
+    // Realizadas/faltas colapsadas
     if(feitas.length){
-      cards+=`<button class="done-toggle" onclick="toggleDone('done-${uid}',this)">▶ Ver realizadas/faltas (${feitas.length})</button>`;
-      cards+=`<div id="done-${uid}" style="display:none"><div class="table-wrap"><table><tbody>`;
-      feitas.forEach(s=>{cards+=`<tr style="opacity:0.65"><td class="td-muted">${fmtDate(s.date)}</td><td class="td-muted">${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')">✏️</button></td></tr>`;});
+      const nFalta=feitas.filter(s=>s.status==='falta').length;
+      cards+=`<button class="done-toggle" onclick="toggleDone('done-${uid}',this)">▶ Ver realizadas/faltas (${feitas.length}${nFalta>0?' — '+nFalta+' falta'+(nFalta>1?'s':''):''})</button>`;
+      cards+=`<div id="done-${uid}" style="display:none"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>DATA</th><th>HORA</th><th>CATEGORIA</th><th>STATUS</th><th>PGTO</th><th>AÇÕES</th></tr></thead><tbody>`;
+      feitas.forEach(s=>{
+        const pkg=s.package_id?allP.find(p=>p.id===s.package_id):null;
+        const sesOrdem=pkg?allS.filter(x=>x.package_id===pkg.id).sort((a,b)=>a.date.localeCompare(b.date)).findIndex(x=>x.id===s.id)+1:null;
+        const totPkg=pkg?parseInt(pkg.total_sessoes)||0:0;
+        cards+=`<tr style="opacity:0.65"><td class="td-muted">${sesOrdem&&totPkg?sesOrdem+'/'+totPkg:'—'}</td><td>${fmtDate(s.date)}</td><td>${s.hora||'—'}</td><td>${badgeTipo(s.tipo)}</td><td>${badgeStatus(s.status)}</td><td>${pgtoBtn(s)}</td><td><button class="btn btn-sm btn-ghost" onclick="openModalSessao('${s.id}')">✏️</button></td></tr>`;
+      });
       cards+=`</tbody></table></div></div>`;
     }
-    // Mini resumo de pacotes do cliente
-    if(pkgsC.length){
-      cards+=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">`;
-      pkgsC.forEach(p=>{
+
+    // Badges de pacotes no rodapé
+    const pkgsC2=allP.filter(p=>p.client_id===cid);
+    if(pkgsC2.length){
+      cards+=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:center">`;
+      cards+=`<span style="font-size:11px;color:var(--text3)">Pacotes:</span>`;
+      pkgsC2.forEach(p=>{
         const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
         const t=parseInt(p.total_sessoes)||0;
         const pago=p.pago===true||p.pago==='true';
-        cards+=`<span class="badge ${pago?'badge-green':'badge-yellow'}" style="cursor:pointer" onclick="openModalPacote('${p.id}')" title="${cName(p.client_id)} - ${TIPOS[p.tipo]?.label||p.tipo}">${TIPOS[p.tipo]?.emoji||'📦'} ${r}/${t} ${pago?'💰':'⏳'}</span>`;
+        cards+=`<span class="badge ${pago?'badge-green':'badge-yellow'}" style="cursor:pointer" onclick="openModalPacote('${p.id}')" title="${TIPOS[p.tipo]?.label||p.tipo}">${TIPOS[p.tipo]?.emoji||'📦'} ${r}/${t} ${pago?'💰':'⏳'}</span>`;
       });
       cards+=`</div>`;
     }
     cards+=`</div>`;
   });
 
-  // Pacotes
+  // Todos os pacotes
   const pacotesHtml=allP.map(p=>{
     const r=allS.filter(s=>s.package_id===p.id&&s.status==='realizada').length;
     const t=parseInt(p.total_sessoes)||0;
@@ -548,11 +571,13 @@ function renderSessoes(){
   setMain(
     `<div class="topbar"><button class="hamburger" onclick="toggleSidebar()">☰</button><h1 class="page-title">Sessões/Pacotes</h1>${themeBtn()}<button class="btn btn-secondary" onclick="openModalPacote()">+ Pacote</button><button class="btn btn-primary" onclick="openModalSessao()">+ Sessão</button></div>`+
     `<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px"><button class="cal-nav-btn" onclick="moveMes(-1)">‹</button><span style="font-weight:600">${ms[month]} ${year}</span><button class="cal-nav-btn" onclick="moveMes(1)">›</button><button class="btn btn-sm btn-ghost" onclick="resetMes()">Hoje</button></div>`+
-    `<div style="margin-bottom:20px">${cards||'<div class="empty"><div class="empty-icon">📋</div><p>Sem sessões neste mês</p></div>'}</div>`+
-    `<div style="margin-bottom:10px;font-size:14px;font-weight:600;color:var(--text2)">📦 Todos os Pacotes</div>`+
+    (cards||'<div class="empty"><div class="empty-icon">📋</div><p>Sem sessões ou pacotes neste mês</p></div>')+
+    `<div style="margin:20px 0 10px;font-size:14px;font-weight:600;color:var(--text2)">📦 Todos os Pacotes</div>`+
     (pacotesHtml||'<div class="empty"><div class="empty-icon">📦</div><p>Nenhum pacote cadastrado</p></div>')
   );
 }
+
+
 function moveMes(d){calDate.setMonth(calDate.getMonth()+d);renderSessoes();}
 function resetMes(){calDate=new Date();renderSessoes();}
 function toggleDone(id,btn){const el=document.getElementById(id);if(!el)return;const open=el.style.display!=='none';el.style.display=open?'none':'block';btn.textContent=(open?'▶':'▼')+btn.textContent.slice(1);}
@@ -773,6 +798,26 @@ function renderConfig(){
 }
 async function changePass(){const p=document.getElementById('cfg-p').value;if(!p||p.length<6){alert('Mínimo 6 caracteres');return;}const {error}=await sb.auth.updateUser({password:p});if(error)alert('Erro: '+error.message);else alert('Senha alterada!');}
 
+
+async function togglePgtoSessao(sid){
+  const s=allS.find(x=>x.id===sid);if(!s)return;
+  // Se tem pacote, altera o pago do pacote
+  if(s.package_id){
+    const p=allP.find(x=>x.id===s.package_id);if(!p)return;
+    const novo=!(p.pago===true||p.pago==='true');
+    await sb.from('packages').update({pago:novo}).eq('id',s.package_id);
+    toast(novo?'💰 Pacote marcado como pago!':'⏳ Pacote marcado como pendente!');
+  }else{
+    const novo=!(s.pago===true||s.pago==='true');
+    await sb.from('sessions').update({pago:novo}).eq('id',sid);
+    toast(novo?'💰 Sessão marcada como paga!':'⏳ Sessão marcada como pendente!');
+  }
+  await loadAll();renderSessoes();
+}
+function pgtoBtn(s){
+  const pago=s.package_id?(allP.find(p=>p.id===s.package_id)?.pago===true):( s.pago===true||s.pago==='true');
+  return `<span class="badge ${pago?'badge-green':'badge-yellow'}" style="cursor:pointer" onclick="togglePgtoSessao('${s.id}')" title="Clique para alternar">${pago?'💰 Pago':'⏳ Pendente'}</span>`;
+}
 // ═══ INIT ════════════════════════════════════════════════════════════════════
 checkSession();
 </script>
