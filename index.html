@@ -860,19 +860,56 @@ async function setStatus(sid, status) {
   showToast('✅ Status atualizado: ' + status);
 }
 
-async function togglePgto(sid) {
+function togglePgto(sid) {
   var s = allSessions.find(function(x){ return x.id===sid; });
   if (!s) return;
-  if (s.package_id) {
-    var p = allPackages.find(function(x){ return x.id===s.package_id; });
-    if (!p) return;
-    await sb.from('packages').update({ pago: !p.pago }).eq('id', s.package_id);
-    showToast(!p.pago ? '💰 Pacote marcado como pago!' : '⏳ Marcado como pendente!');
+  var pkg = s.package_id ? allPackages.find(function(x){ return x.id===s.package_id; }) : null;
+  var sessPago = !!s.pago;
+  var pkgPago  = pkg ? !!pkg.pago : false;
+
+  var html = '<p style="color:var(--text2);font-size:13px;margin-bottom:16px">Como deseja registrar o pagamento?</p>';
+  html += '<div style="display:flex;flex-direction:column;gap:10px">';
+
+  // Option 1: this session only
+  html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">';
+  html += '<div style="font-weight:600;margin-bottom:4px">💳 Esta sessão apenas</div>';
+  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Marca somente esta sessão como paga individualmente</div>';
+  if (sessPago) {
+    html += '<button class="btn btn-ghost btn-sm" data-sid="'+sid+'" onclick="pagarSessao(this.dataset.sid,false)">↩️ Marcar como pendente</button>';
   } else {
-    await sb.from('sessions').update({ pago: !s.pago }).eq('id', sid);
-    showToast(!s.pago ? '💰 Sessão marcada como paga!' : '⏳ Marcada como pendente!');
+    html += '<button class="btn btn-primary btn-sm" data-sid="'+sid+'" onclick="pagarSessao(this.dataset.sid,true)">✅ Marcar esta sessão como paga</button>';
   }
-  await loadAll(); renderSessoes();
+  html += '</div>';
+
+  // Option 2: entire package (only if has package)
+  if (pkg) {
+    html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">';
+    html += '<div style="font-weight:600;margin-bottom:4px">📦 Pacote inteiro — ' + fmtMoney(pkg.valor_total) + '</div>';
+    html += '<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Marca o pacote completo como pago de uma vez</div>';
+    if (pkgPago) {
+      html += '<span class="badge badge-green" style="margin-bottom:8px;display:inline-flex">💰 Pacote já está pago</span><br>';
+      html += '<button class="btn btn-ghost btn-sm" data-pid="'+pkg.id+'" onclick="pagarPacote(this.dataset.pid,false)">↩️ Marcar como pendente</button>';
+    } else {
+      html += '<button class="btn btn-primary btn-sm" data-pid="'+pkg.id+'" onclick="pagarPacote(this.dataset.pid,true)">💰 Marcar pacote completo como pago</button>';
+    }
+    html += '</div>';
+  }
+
+  html += '</div>';
+  html += '<div style="margin-top:14px;text-align:right"><button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancelar</button></div>';
+  openModal('Registrar Pagamento', html);
+}
+
+async function pagarSessao(sid, pago) {
+  await sb.from('sessions').update({ pago: pago }).eq('id', sid);
+  await loadAll(); closeModal(); renderSessoes();
+  showToast(pago ? '💳 Sessão marcada como paga!' : '⏳ Sessão marcada como pendente!');
+}
+
+async function pagarPacote(pkgId, pago) {
+  await sb.from('packages').update({ pago: pago }).eq('id', pkgId);
+  await loadAll(); closeModal(); renderSessoes();
+  showToast(pago ? '💰 Pacote marcado como pago!' : '⏳ Pacote marcado como pendente!');
 }
 
 // ══════════════════════════════════════════════════════════
