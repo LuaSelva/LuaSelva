@@ -1377,14 +1377,20 @@ function renderFinanceiro() {
   var MS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   var mesAtual = y + '-' + String(m+1).padStart(2,'0');
 
+  // Retorna o mês de pagamento efetivo de um pacote pago
+  function pkgPayMes(p){
+    var d=p.data_pagamento||(p.updated_at?p.updated_at.slice(0,10):null)||(p.created_at?p.created_at.slice(0,10):null);
+    return d?d.slice(0,7):'';
+  }
+
   var sesMes = allSessions.filter(function(s){
     if (s.status!=='realizada' && s.status!=='parcial') return false;
     var parts = s.date.split('-').map(Number);
     return parts[0]===y && (parts[1]-1)===m;
   });
   var recMes = sesMes.reduce(function(a,s){ return a+(parseFloat(s.valor)||0); }, 0);
-  // Pacotes pagos neste mês (pelo campo data_pagamento)
-  recMes += allPackages.filter(function(p){ return p.pago && p.data_pagamento && p.data_pagamento.slice(0,7)===mesAtual; })
+  // Pacotes pagos neste mês
+  recMes += allPackages.filter(function(p){ return p.pago && pkgPayMes(p)===mesAtual; })
     .reduce(function(a,p){ return a+(parseFloat(p.valor_total)||0); }, 0);
   var recTotal = allSessions.filter(function(s){ return s.status==='realizada'||s.status==='parcial'; })
     .reduce(function(a,s){ return a+(parseFloat(s.valor)||0); }, 0);
@@ -1399,10 +1405,10 @@ function renderFinanceiro() {
     var ym = s.date.slice(0,7);
     porMes[ym] = (porMes[ym]||0) + (parseFloat(s.valor)||0);
   });
-  // Pacotes pagos entram no histórico pelo mês do pagamento
-  allPackages.filter(function(p){ return p.pago && p.data_pagamento; }).forEach(function(p){
-    var ym = p.data_pagamento.slice(0,7);
-    porMes[ym] = (porMes[ym]||0) + (parseFloat(p.valor_total)||0);
+  // Pacotes pagos entram no histórico pelo mês do pagamento (com fallback para updated_at/created_at)
+  allPackages.filter(function(p){ return p.pago; }).forEach(function(p){
+    var ym = pkgPayMes(p);
+    if(ym){ porMes[ym] = (porMes[ym]||0) + (parseFloat(p.valor_total)||0); }
   });
   var meses = Object.keys(porMes).sort().reverse();
 
