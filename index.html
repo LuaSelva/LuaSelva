@@ -291,7 +291,7 @@ function initials(name) {
 }
 function clientName(id) {
   var c = allClients.find(function(x){ return x.id === id; });
-  return c ? c.name : '—';
+  return c ? escHtml(c.name) : '—';
 }
 function pluralSessao(n) {
   return n === 1 ? '1 sessão' : n + ' sessões';
@@ -542,8 +542,8 @@ function buildClientesTable(list) {
     var np = allPackages.filter(function(p){ return p.client_id===c.id; }).length;
     var nr = allSessions.filter(function(s){ return s.client_id===c.id && s.status==='realizada'; }).length;
     html += '<tr>';
-    html += '<td><div style="display:flex;align-items:center;gap:9px"><div class="avatar" style="width:34px;height:34px;font-size:12px">' + initials(c.name) + '</div><strong>' + c.name + '</strong></div></td>';
-    html += '<td class="td-muted">' + (c.phone||'—') + '</td>';
+    html += '<td><div style="display:flex;align-items:center;gap:9px"><div class="avatar" style="width:34px;height:34px;font-size:12px">' + initials(c.name) + '</div><strong>' + escHtml(c.name) + '</strong></div></td>';
+    html += '<td class="td-muted">' + escHtml(c.phone||'—') + '</td>';
     html += '<td><span class="badge badge-blue">' + (np===1?'1 pacote':np+' pacotes') + '</span></td>';
     html += '<td><span class="badge badge-green">' + (nr===1?'1 realizada':nr+' realizadas') + '</span></td>';
     html += '<td style="white-space:nowrap">';
@@ -1591,7 +1591,7 @@ function previewRestore(input) {
       var preview = document.getElementById('bk-preview');
       preview.innerHTML =
         '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:13px;font-weight:600;margin-bottom:6px">📋 Arquivo: ' + file.name + '</div>' +
+        '<div style="font-size:13px;font-weight:600;margin-bottom:6px">📋 Arquivo: ' + escHtml(file.name) + '</div>' +
         '<div style="font-size:12px;color:var(--text2)">Data do backup: ' + (data.date?new Date(data.date).toLocaleDateString('pt-BR'):'?') + '</div>' +
         '<div style="font-size:12px;color:var(--text2)">Conteúdo: ' +
           (data.data.clients||[]).length + ' clientes · ' +
