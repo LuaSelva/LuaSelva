@@ -456,6 +456,8 @@ function renderDashboard() {
   var ativos = allClients.filter(function(c){ return c.active !== false; }).length;
   var receita = allSessions.filter(function(s){ return s.status==='realizada'||s.status==='parcial'; })
     .reduce(function(a,s){ return a + (parseFloat(s.valor)||0); }, 0);
+  receita += allPackages.filter(function(p){ return p.pago; })
+    .reduce(function(a,p){ return a+(parseFloat(p.valor_total)||0); }, 0);
   var proximas = allSessions.filter(function(s){ return s.date>=hoje && s.date<=em7s && s.status==='agendada'; })
     .sort(function(a,b){ return a.date.localeCompare(b.date) || (a.hora||'').localeCompare(b.hora||''); });
   var pendentes = allPackages.filter(function(p){ return !p.pago && !p.encerrado; });
@@ -1020,6 +1022,7 @@ async function savePacote(id) {
     pagamento:    document.getElementById('p-pgto').value,
     encerrado:    document.getElementById('p-enc').value === 'true',
     pago:         (document.getElementById('p-pago') || {}).checked || false,
+    data_pagamento: (document.getElementById('p-pago')||{}).checked ? new Date().toISOString().slice(0,10) : null,
     observacoes:  document.getElementById('p-obs').value.trim(),
     user_id:      currentUser.id
   };
@@ -1070,7 +1073,7 @@ async function savePacote(id) {
           date:       startDate,
           hora:       hora,
           status:     'agendada',
-          valor:      0,
+          valor:      parseFloat(data.valor_total) || 0,
           user_id:    currentUser.id
         });
         showToast('✅ Pacote criado com 1 sessão!');
@@ -1320,6 +1323,8 @@ async function loadNotas() {
   buildNotasList();
 }
 
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 function buildNotasList() {
   var el = document.getElementById('notas-list');
   if (!el) return;
@@ -1328,9 +1333,9 @@ function buildNotasList() {
   var html = notas.map(function(n) {
     return '<div class="note-card" id="nc-' + n.id + '">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">' +
-      '<input style="background:none;border:none;font-size:14px;font-weight:600;color:var(--text);padding:0;flex:1;outline:none" value="' + ((n.title||'').replace(/"/g,'&quot;')) + '" placeholder="Título" onchange="updateNota(\'' + n.id + '\',\'title\',this.value)">' +
+      '<input style="background:none;border:none;font-size:14px;font-weight:600;color:var(--text);padding:0;flex:1;outline:none" value="' + escHtml(n.title) + '" placeholder="Título" onchange="updateNota(\'' + n.id + '\',\'title\',this.value)">' +
       '<button class="btn btn-danger btn-sm" onclick="deleteNota(\'' + n.id + '\')">🗑️</button></div>' +
-      '<textarea style="width:100%;background:none;border:none;color:var(--text2);font-size:13px;resize:none;min-height:65px;font-family:inherit;outline:none" placeholder="Escreva aqui..." oninput="onNotaInput(\'' + n.id + '\',\'conteudo\',this.value)">' + (n.conteudo||'') + '</textarea>' +
+      '<textarea style="width:100%;background:none;border:none;color:var(--text2);font-size:13px;resize:none;min-height:65px;font-family:inherit;outline:none" placeholder="Escreva aqui..." oninput="onNotaInput(\'' + n.id + '\',\'conteudo\',this.value)">' + escHtml(n.conteudo) + '</textarea>' +
       '<div style="font-size:10px;color:var(--text3);margin-top:4px" id="ns-' + n.id + '">' + (n.updated_at?fmtDate(n.updated_at.slice(0,10)):'') + '</div>' +
       '</div>';
   }).join('');
@@ -1377,9 +1382,15 @@ function renderFinanceiro() {
     var parts = s.date.split('-').map(Number);
     return parts[0]===y && (parts[1]-1)===m;
   });
-  var recMes   = sesMes.reduce(function(a,s){ return a+(parseFloat(s.valor)||0); }, 0);
+  var recMes = sesMes.reduce(function(a,s){ return a+(parseFloat(s.valor)||0); }, 0);
+  // Pacotes pagos neste mês (pelo campo data_pagamento)
+  recMes += allPackages.filter(function(p){ return p.pago && p.data_pagamento && p.data_pagamento.slice(0,7)===mesAtual; })
+    .reduce(function(a,p){ return a+(parseFloat(p.valor_total)||0); }, 0);
   var recTotal = allSessions.filter(function(s){ return s.status==='realizada'||s.status==='parcial'; })
     .reduce(function(a,s){ return a+(parseFloat(s.valor)||0); }, 0);
+  // Total recebido inclui todos os pacotes pagos
+  recTotal += allPackages.filter(function(p){ return p.pago; })
+    .reduce(function(a,p){ return a+(parseFloat(p.valor_total)||0); }, 0);
   var pendentes = allPackages.filter(function(p){ return !p.pago && !p.encerrado; });
   var totPend   = pendentes.reduce(function(a,p){ return a+(parseFloat(p.valor_total)||0); }, 0);
 
@@ -1387,6 +1398,11 @@ function renderFinanceiro() {
   allSessions.filter(function(s){ return s.status==='realizada'||s.status==='parcial'; }).forEach(function(s){
     var ym = s.date.slice(0,7);
     porMes[ym] = (porMes[ym]||0) + (parseFloat(s.valor)||0);
+  });
+  // Pacotes pagos entram no histórico pelo mês do pagamento
+  allPackages.filter(function(p){ return p.pago && p.data_pagamento; }).forEach(function(p){
+    var ym = p.data_pagamento.slice(0,7);
+    porMes[ym] = (porMes[ym]||0) + (parseFloat(p.valor_total)||0);
   });
   var meses = Object.keys(porMes).sort().reverse();
 
@@ -1468,12 +1484,13 @@ function renderFinanceiro() {
 }
 
 async function markPendente(pid) {
-  await sb.from('packages').update({ pago: false }).eq('id', pid);
+  await sb.from('packages').update({ pago: false, data_pagamento: null }).eq('id', pid);
   await loadAll(); renderFinanceiro(); showToast('⏳ Marcado como pendente!');
 }
 
 async function markPago(pid) {
-  await sb.from('packages').update({ pago: true }).eq('id', pid);
+  var hoje = new Date().toISOString().slice(0,10);
+  await sb.from('packages').update({ pago: true, data_pagamento: hoje }).eq('id', pid);
   await loadAll(); renderFinanceiro(); showToast('💰 Pagamento registrado!');
 }
 
